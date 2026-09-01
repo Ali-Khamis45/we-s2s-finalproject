@@ -89,6 +89,18 @@ class Settings(BaseSettings):
     retrieval_k: int = 4
     retrieval_fetch_k: int = 20
     retrieval_lambda: float = 0.5
+    #: Cap on how much of each retrieved chunk is pasted into the prompt.
+    #:
+    #: Chunks are ~512 tokens, so four of them contributed ~2,000 tokens of a
+    #: 3,167-token prompt — 64% of it — and prompt processing is what a CPU
+    #: model spends its time on. Measured on the 3B: a full turn took 50 s, of
+    #: which 46 s was the LLM.
+    #:
+    #: Truncation happens on a sentence boundary, and the full text is still
+    #: returned in the citation the UI displays. The model gets the opening of
+    #: each passage, which is where the retrieval match almost always sits;
+    #: the reader can still expand the whole excerpt.
+    max_excerpt_chars: int = 700
     # Below this best-match score a question is treated as outside the corpus,
     # and the coach says it has no material rather than inventing an answer.
     #
@@ -117,7 +129,12 @@ class Settings(BaseSettings):
     llm_base_url: str = "http://127.0.0.1:8080/v1"
     llm_model: str = "qwen2.5-3b-instruct-q4_k_m"
     llm_api_key: str = "not-needed"
-    llm_max_tokens: int = 420
+    #: The system prompt asks for two to four spoken sentences, which is ~120
+    #: tokens. On CPU the model decodes at single-digit tokens per second, so a
+    #: generous cap is paid for in seconds of latency on every turn: 420 tokens
+    #: is roughly a minute. 200 leaves headroom over the intended reply length
+    #: without funding a monologue nobody wants read aloud.
+    llm_max_tokens: int = 200
     llm_temperature: float = 0.6
     llm_timeout_s: float = 120.0
     # Track M swaps this to "finetuned" when M8 lands. Keeping both addressable

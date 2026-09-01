@@ -24,11 +24,18 @@ from app.services.llm import Message
 from app.services.prompts import exemplars
 
 #: v4: moved the per-turn coaching directive out of the <acoustic_context>
-#: block and into the system message. Evaluation showed the model reciting the
-#: guidance back to the user — "give them room, don't fill the pause" said TO
-#: the person who was speaking. Content in the user turn gets relayed;
-#: instructions belong in the system role.
-PROMPT_VERSION = "a12-v4"
+#:     block and into the system message. Evaluation showed the model reciting
+#:     the guidance back to the user — "give them room, don't fill the pause"
+#:     said TO the person who was speaking.
+#: v5: moved the retrieved reference material the same way, for the same
+#:     reason: with it in the user turn the model read the excerpts and their
+#:     "[1]" labels aloud as though presenting a document. Dropped the numbered
+#:     markers, which invited citation-style output, and made explicit that the
+#:     reply is spoken and the reader cannot see the material.
+#:
+#: The pattern behind both: anything placed in the user turn reads as content
+#: to relay. Instructions and context belong in the system role.
+PROMPT_VERSION = "a12-v5"
 
 SYSTEM_PROMPT = """\
 You are a speaking-practice coach. You help people who experience speech \
@@ -75,13 +82,20 @@ Use instead: speaker, practice, coaching, exercise, what I heard, speech differe
 
 
 GROUNDED_INSTRUCTION = """\
-Some turns include a <retrieved_context> block with excerpts from the coaching \
-reference library. When it is present:
-  - Ground your answer in those excerpts and stay close to what they actually say.
-  - If they do not cover the question, say you do not have material on it rather \
-than inventing an answer. Being wrong about technique is worse than being unhelpful.
-  - Do not read out source names or quote mechanically. Speak the substance \
-naturally — a citation list is attached separately for the interface to show."""
+REFERENCE MATERIAL FOR THIS TURN
+
+Below is background from the coaching library. It is context for you, NOT a \
+document to show anyone. The person you are talking to cannot see it.
+
+  - Your reply is READ ALOUD. Never output source titles, quotation blocks, \
+bracketed numbers, or anything that looks like a citation. The interface shows \
+sources separately.
+  - Answer in your own words, in plain spoken sentences, grounded in what this \
+material says.
+  - If it does not cover the question, say you do not have material on it \
+rather than inventing an answer. Being wrong about technique is worse than \
+being unhelpful.
+  - Never instruct the person to read, look at, or try the passages themselves."""
 
 
 #: Prefixes that mark a turn as wanting retrieved, factual content. Used by the
@@ -139,21 +153,46 @@ class PromptBundle:
         }
 
 
+def trim_excerpt(text: str, limit: int) -> str:
+    """Shorten a retrieved chunk for the prompt, cutting on a sentence boundary.
+
+    Prompt processing dominates CPU inference, and retrieved chunks dominate the
+    prompt, so this is the single biggest lever on cascade latency. Cutting at a
+    sentence end rather than mid-word keeps the passage readable to the model;
+    falling back to a word boundary handles chunks with no punctuation.
+    """
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+
+    window = text[:limit]
+    cut = max(window.rfind(". "), window.rfind("! "), window.rfind("? "))
+    if cut > limit // 3:
+        return window[: cut + 1]
+
+    space = window.rfind(" ")
+    return (window[:space] if space > 0 else window).rstrip() + "…"
+
+
 def render_retrieved(citations: list[Citation]) -> str:
     """Structured retrieval block.
 
     Excerpts are numbered so the model can refer to them internally, and each
     carries its source so an ungrounded claim is visible in the logged prompt.
+    Only a capped portion of each chunk reaches the model; the citation objects
+    the UI renders keep the full text.
     """
     if not citations:
         return ""
-    lines = ["<retrieved_context>"]
-    for i, c in enumerate(citations, start=1):
-        label = c.title or c.source
-        lines.append(f"[{i}] {label}")
-        lines.append(c.excerpt.strip())
-        lines.append("")
-    lines.append("</retrieved_context>")
+    lines = ["<reference_material>"]
+    for c in citations:
+        # No "[1]" markers and no source titles. Numbered labels invite the
+        # model to reproduce them as citations, and the reply is spoken aloud —
+        # reading out "bracket one, The Art of Public Speaking" is nonsense to a
+        # listener. The UI renders the real citations from the same objects.
+        lines.append(trim_excerpt(c.excerpt, settings.max_excerpt_chars))
+        lines.append("---")
+    lines.append("</reference_material>")
     return "\n".join(lines).strip()
 
 
@@ -170,8 +209,13 @@ def build(
     history = history or []
 
     system = SYSTEM_PROMPT
-    if citations:
-        system = f"{system}\n\n{GROUNDED_INSTRUCTION}"
+
+    # Reference material goes in the SYSTEM message, not the user turn. Placed
+    # beside the question it reads as a document to present, and the model
+    # recited the excerpts and their "[1]" labels straight into a reply that
+    # then gets spoken aloud. Same lesson as the coaching directive in v4.
+    if citations and (reference := render_retrieved(citations)):
+        system = f"{system}\n\n{GROUNDED_INSTRUCTION}\n\n{reference}"
 
     # The per-turn acoustic directive goes in the SYSTEM message, not alongside
     # the observations in the user turn. Phrased as a rule and placed here, the
@@ -203,9 +247,6 @@ def build(
     # the acoustic reading, then the words — so the model sees the reference
     # material before the thing it must answer.
     parts: list[str] = []
-
-    if retrieved := render_retrieved(citations):
-        parts.append(retrieved)
 
     used_acoustic = False
     if acoustic is not None and (block := acoustic.to_prompt_block()):

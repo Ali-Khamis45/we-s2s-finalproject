@@ -377,7 +377,37 @@ rule. The recitation stopped:
 > *"It's not something I can diagnose — that would be for a speech-language
 > pathologist to do. Let's start rehearsing instead."*
 
-This is the clearest justification for the versioning discipline: the change is
+### 8.3 The same bug again, in a different place
+
+Running the finished system against the real 3B model and the real corpus
+surfaced the identical failure in the retrieval path. With the retrieved
+excerpts placed in the user turn under `[1]`, `[2]` labels, the model presented
+them as a document:
+
+> *"Here's an exercise: read these sentences without any pauses at all:
+> **[1] The Art of Public Speaking** — Pause Enables the Mind of the Speaker to
+> Gather His Forces… **[2] The Art of Public Speaking** — may demand. It is not
+> possible for every speaker…"*
+
+Every reply is synthesized to audio, so this would have been spoken aloud as
+"bracket one, The Art of Public Speaking". Version `a12-v5` moved the reference
+material into the system message, removed the numbered markers that invited
+citation-style output, and stated explicitly that the reply is spoken and the
+listener cannot see the material. The replies became clean:
+
+> *"To breathe properly, focus on taking deep breaths from your diaphragm.
+> Imagine lying flat in bed and noticing how the breathing happens there. Try
+> this for a few minutes before you start speaking to warm up."*
+
+### 8.4 The generalisable lesson
+
+Both bugs share one cause, and it is the most transferable finding in this
+section:
+
+> **Anything placed in the user turn reads as content to relay. Instructions
+> and context belong in the system role.**
+
+It is the clearest justification for the versioning discipline: each change is
 attributable, reversible, and its effect is visible in the evaluation output.
 
 ## 9. Measurements
@@ -422,21 +452,39 @@ project exists to avoid.
 
 ### 9.3 Cascade latency
 
-Warm path, CPU, 3.6 s utterance:
+Measured on the shipped configuration: Qwen2.5-3B-Instruct Q4_K_M on CPU (16
+logical cores), Whisper `base` int8, the real 1,057-chunk corpus.
 
-| Stage | p50 |
-|---|---|
-| Whisper `base` STT | ~600 ms |
-| Acoustic analyzer | 3 ms |
-| Prompt assembly | <1 ms |
-| **Time to first audio** | **~1.9 s** |
+| Turn type | STT | Retrieval | LLM | Total |
+|---|---|---|---|---|
+| Spoken, no retrieval | 776 ms | — | 9.0 s | **9.8 s** |
+| Typed, with retrieval | — | 25 ms | ~15 s | **~15 s** |
+| First turn (cold caches) | — | 4.5 s | 16.5 s | ~21 s |
 
-**Our original estimate of 750 ms – 1.1 s was wrong**, and measurement
-disproved it. The figure above was taken with a 0.5B model where the project
-ships 3B, so the real number is higher still.
+**Our estimates were wrong twice, in the same direction.** The plan first
+claimed 750 ms – 1.1 s. A measurement on a 0.5B stand-in produced ~1.9 s. The
+real 3B on the real corpus produced **50 s** on first run, before the two
+optimizations below.
 
-This does not weaken the argument — it widens the gap against Moshi's ~200 ms,
-which is the comparison the project exists to make.
+Generation dominates completely: retrieval settles at 25 ms once the embedding
+model is warm, STT is under a second, and everything else is noise. Two changes
+took the figure from 50 s to ~15 s:
+
+1. **Capping retrieved excerpts at 700 characters.** Four ~512-token chunks
+   contributed 2,023 tokens of a 3,167-token prompt — 64% of it — and prompt
+   processing is what a CPU model spends its time on. Truncating on a sentence
+   boundary cut the prompt to 1,666 tokens. The UI still receives the full
+   excerpt for display; only the model's copy is trimmed.
+2. **Reducing the generation cap from 420 to 200 tokens.** The system prompt
+   asks for two to four spoken sentences, roughly 120 tokens. At single-digit
+   tokens per second on CPU, a 420-token budget funds a minute of latency for
+   output nobody wants read aloud.
+
+**~15 s is still not conversational**, and the report should say so plainly.
+That is the honest cost of running a 3B model on CPU because the GPU is
+reserved for the live path, and it is precisely the trade the project exists to
+measure: the cascade buys retrieval, citation and groundedness, and pays
+seconds for them, against Moshi's ~200 ms which buys none of those things.
 
 ## 10. Model Evaluation
 
