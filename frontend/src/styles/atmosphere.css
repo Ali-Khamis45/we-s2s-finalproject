@@ -1,0 +1,131 @@
+/* The room.
+ *
+ * Fully procedural — no image ships. A generated .webp was specified, but a
+ * static image cannot respond to mic level, and the light-fall here does: the
+ * lamp warms and expands while someone is speaking. Three stacked layers,
+ * all fixed, all behind the app, none of them interactive.
+ *
+ *   .atmo-lamp    a soft warm light-fall, drifting on a 54 s loop
+ *   .atmo-grain   SVG feTurbulence at 4% — what stops dark CSS looking flat
+ *   .atmo-vignette edges falling to --ground-0
+ *
+ * Only opacity and transform animate. --lamp-warmth is written from JS
+ * (Atmosphere.tsx) at a heavily smoothed rate; it is felt, not watched.
+ */
+
+.atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background: var(--ground-1);
+}
+
+/* ---- the lamp ---- */
+
+.atmo-lamp {
+  position: absolute;
+  /* Oversized so the drift never exposes an edge. */
+  inset: -25%;
+  background:
+    radial-gradient(
+      42% 38% at 26% 18%,
+      rgba(249, 191, 41, calc(0.16 * var(--lamp-warmth, 0.35))) 0%,
+      rgba(249, 191, 41, calc(0.06 * var(--lamp-warmth, 0.35))) 38%,
+      transparent 68%
+    ),
+    radial-gradient(
+      55% 50% at 78% 82%,
+      rgba(111, 156, 138, calc(0.1 * var(--lamp-warmth, 0.35))) 0%,
+      transparent 62%
+    );
+  transform: scale(calc(1 + 0.06 * var(--lamp-warmth, 0.35)));
+  transition: transform var(--t-slow) var(--e-out);
+  animation: lamp-drift 54s var(--e-in-out) infinite alternate;
+  will-change: transform;
+}
+
+@keyframes lamp-drift {
+  0% {
+    translate: -2% -1%;
+  }
+  100% {
+    translate: 3% 2%;
+  }
+}
+
+/* A second, slower pass at a different scale keeps the light from reading as
+ * one moving blob. */
+.atmo-lamp::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    30% 26% at 60% 40%,
+    rgba(249, 191, 41, calc(0.07 * var(--lamp-warmth, 0.35))) 0%,
+    transparent 70%
+  );
+  animation: lamp-drift-slow 88s var(--e-in-out) infinite alternate;
+}
+
+@keyframes lamp-drift-slow {
+  0% {
+    translate: 4% 3%;
+  }
+  100% {
+    translate: -3% -4%;
+  }
+}
+
+/* ---- grain ---- */
+
+.atmo-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.04;
+  mix-blend-mode: overlay;
+}
+
+:root[data-theme="light"] .atmo-grain {
+  opacity: 0.025;
+}
+
+/* ---- vignette ---- */
+
+.atmo-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    120% 90% at 50% 40%,
+    transparent 40%,
+    var(--ground-0) 100%
+  );
+}
+
+/* The room breathes with the session: a touch more open while connected. */
+.atmosphere[data-session="connected"] .atmo-vignette {
+  background: radial-gradient(
+    135% 100% at 50% 40%,
+    transparent 46%,
+    var(--ground-0) 100%
+  );
+}
+
+.atmo-vignette {
+  transition: background var(--t-scene) var(--e-in-out);
+}
+
+/* Everything above the room. */
+.app {
+  position: relative;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .atmo-lamp,
+  .atmo-lamp::after {
+    animation: none !important;
+    translate: none !important;
+  }
+}

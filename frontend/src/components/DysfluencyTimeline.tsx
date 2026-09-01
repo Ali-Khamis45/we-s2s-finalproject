@@ -84,7 +84,14 @@ export function DysfluencyTimeline({ profile, compact = false }: Props) {
             className={`timeline-event ${EVENT_CLASS[e.kind]} ${
               hovered === e.index ? "is-active" : ""
             }`}
-            style={{ left: `${e.leftPct}%`, width: `${e.widthPct}%` }}
+            // left/width stay percentages: they are the to-scale geometry, and
+            // two tests assert them. Only the reveal is staggered, and it rides
+            // on transform so nothing here triggers layout.
+            style={{
+              left: `${e.leftPct}%`,
+              width: `${e.widthPct}%`,
+              animationDelay: `${200 + e.leftPct * 3.5}ms`,
+            }}
             onMouseEnter={() => setHovered(e.index)}
             onMouseLeave={() => setHovered(null)}
             onFocus={() => setHovered(e.index)}

@@ -1,6 +1,8 @@
-import { useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 
 import type { ConnectionState } from "../hooks/useCoachSession";
+import { Button } from "./ui/primitives";
+import { VoiceOrb, type OrbState } from "./VoiceOrb";
 
 interface Props {
   connection: ConnectionState;
@@ -24,7 +26,24 @@ export function Composer({
   speaking,
 }: Props) {
   const [draft, setDraft] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const connected = connection === "connected";
+
+  const orbState: OrbState = speaking
+    ? "speaking"
+    : connected
+      ? "live"
+      : connection === "connecting"
+        ? "connecting"
+        : "idle";
+
+  // Grow with the content instead of scrolling a two-line box.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
+  }, [draft]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -40,47 +59,44 @@ export function Composer({
     }
   };
 
+  const caption = speaking
+    ? "Coach is talking — say something to cut in"
+    : connected
+      ? "Listening. Take your time."
+      : connection === "connecting"
+        ? "Opening the microphone"
+        : "Press to start talking";
+
   return (
     <div className="composer">
       <div className="composer-voice">
         <button
           type="button"
-          className={`mic-button ${connected ? "is-live" : ""}`}
+          className="orb-button"
           onClick={connected ? onStop : onStart}
           disabled={connection === "connecting"}
+          aria-pressed={connected}
+          aria-label={connected ? "Stop speaking" : "Start speaking"}
         >
-          <MicIcon active={connected} />
-          <span>
-            {connection === "connecting"
-              ? "Connecting…"
-              : connected
-                ? "Stop"
-                : "Start speaking"}
-          </span>
+          <VoiceOrb state={orbState} micLevel={listening ? micLevel : 0} />
         </button>
 
-        {connected && (
-          <div className="level" aria-hidden="true">
-            {Array.from({ length: 14 }, (_, i) => (
-              <i
-                key={i}
-                className={
-                  listening && micLevel * 22 > i ? "level-bar is-on" : "level-bar"
-                }
-              />
-            ))}
-          </div>
-        )}
+        <span className="orb-caption">
+          <strong>{connected ? "Stop" : "Start speaking"}</strong>
+          {/* The state is in text as well as in motion — never motion alone. */}
+          <span role="status">{caption}</span>
+        </span>
 
         {speaking && (
-          <button type="button" className="ghost-button" onClick={onInterrupt}>
+          <Button variant="ghost" onClick={onInterrupt}>
             Interrupt
-          </button>
+          </Button>
         )}
       </div>
 
       <form className="composer-text" onSubmit={submit}>
         <textarea
+          ref={textareaRef}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
@@ -88,38 +104,15 @@ export function Composer({
           rows={1}
           aria-label="Type a message to the coach"
         />
-        <button type="submit" className="send-button" disabled={!draft.trim()}>
+        <Button
+          type="submit"
+          variant="primary"
+          progress={draft.trim() ? 1 : 0}
+          disabled={!draft.trim()}
+        >
           Send
-        </button>
+        </Button>
       </form>
     </div>
-  );
-}
-
-function MicIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      {active ? (
-        <rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" />
-      ) : (
-        <>
-          <rect
-            x="9"
-            y="3"
-            width="6"
-            height="11"
-            rx="3"
-            stroke="currentColor"
-            strokeWidth="1.8"
-          />
-          <path
-            d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-          />
-        </>
-      )}
-    </svg>
   );
 }

@@ -1,0 +1,200 @@
+/* Night Studio — design tokens.
+ *
+ * A dark recording booth lit by a single warm lamp. The Furni palette inverted:
+ * its deep green becomes the air, its amber becomes the only light source, its
+ * pale tints become the type.
+ *
+ * Dark is the default and ships first. Every colour is defined on bare :root,
+ * so nothing has its only definition inside a media query — a token declared
+ * only under @media renders unstyled in the un-stamped default state.
+ */
+
+:root {
+  /* ---- ground: the room. green-black, never pure #000 ---- */
+  --ground-0: #0a0f0d;
+  --ground-1: #0e1512;
+  --ground-2: #141d19;
+  --ground-3: #1b2621;
+  --scrim: #060a09;
+
+  /* ---- structure ---- */
+  --rule: #223029;
+  --rule-firm: #33463d;
+
+  /* ---- type ---- */
+  --ink: #eff2f1;
+  --ink-2: #dce5e4;
+  --muted: #8ca096;
+  --faint: #5d7268;
+
+  /* ---- the lamp. reserved: live path and primary action only ---- */
+  --amber: #f9bf29;
+  --amber-hot: #ffd35c;
+  --amber-dim: #b8891a;
+  --amber-wash: rgba(249, 191, 41, 0.12);
+  --amber-glow: rgba(249, 191, 41, 0.28);
+  --amber-ink: #0a0f0d; /* type ON amber */
+  /* The orb is a light source, not type, so it keeps full-strength amber in
+   * both themes. Reusing --amber there made it a muddy ochre disc in light
+   * mode, where that token is deliberately darkened for legibility. */
+  --orb: #f9bf29;
+  --orb-hot: #ffd35c;
+
+  /* ---- the second voice: grounded/cascade path ---- */
+  --sage: #6f9c8a;
+  --sage-deep: #3b5d50;
+  --sage-wash: rgba(111, 156, 138, 0.12);
+
+  --danger: #e8705c;
+  --danger-wash: rgba(232, 112, 92, 0.12);
+
+  /* ---- dysfluency events ----------------------------------------------
+   * Categorical hues. NOT a severity ramp: nothing here may imply one kind of
+   * speech is worse than another (docs/ETHICS.md).
+   *
+   * Derived from Okabe-Ito, then re-placed inside the dark-mode OKLCH
+   * lightness band [0.48, 0.67] with the CVD-confusable pairs pushed to
+   * opposite ends of the band so they differ in brightness where hue fails.
+   * Validated all-pairs in both modes: lightness, chroma floor, CVD
+   * separation, normal-vision floor and contrast all pass.
+   *
+   * The brief's original set failed every one of those checks — block and
+   * prolongation sat 10.1 ΔE apart, indistinguishable even with full colour
+   * vision, and they are the two events this product exists to show.
+   *
+   * `unsure` carries no hue on purpose. It means "the signal was ambiguous,
+   * do not act on it"; a competing colour would overstate it. It renders as a
+   * neutral hatched mark instead — texture as encoding.
+   */
+  --ev-block: #2d90c3;   /* sky blue      */
+  --ev-prolong: #c78200; /* orange        */
+  --ev-sound: #bf6d9b;   /* red-purple    */
+  --ev-word: #007c54;    /* blue-green    */
+  --ev-filler: #b64100;  /* vermillion    */
+  --ev-unsure: #46564e;  /* neutral, hatched */
+
+  /* ---- type families ---- */
+  --f-display: "Bricolage Grotesque", "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-text: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --f-serif: "Instrument Serif", Georgia, "Times New Roman", serif;
+
+  /* ---- type scale. nothing between steps ---- */
+  --s-2xs: 0.6875rem; /* 11 */
+  --s-xs: 0.8125rem;  /* 13 */
+  --s-sm: 0.9375rem;  /* 15 — body */
+  --s-md: 1.0625rem;  /* 17 */
+  --s-lg: 1.375rem;   /* 22 */
+  --s-xl: 1.875rem;   /* 30 */
+  --s-2xl: 2.75rem;   /* 44 */
+  --s-3xl: 4rem;      /* 64 */
+
+  /* ---- space ---- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 72px;
+
+  /* ---- radius. the old 3px was the most unstyled value in the codebase ---- */
+  --r-sm: 8px;
+  --r-md: 14px;
+  --r-lg: 22px;
+  --r-full: 999px;
+
+  /* ---- motion ---- */
+  --t-instant: 90ms;
+  --t-fast: 160ms;
+  --t-base: 260ms;
+  --t-slow: 420ms;
+  --t-scene: 700ms;
+  --e-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --e-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  /* A spring, as CSS. `spring()` is framer-motion notation and is not valid
+   * CSS; linear() is how the platform approximates one. */
+  --e-spring: linear(
+    0, 0.006, 0.025, 0.101, 0.539, 0.815, 0.934, 0.982, 1.007, 1.012,
+    1.008, 1.003, 1, 0.999, 1
+  );
+}
+
+/* ---- light theme: faithful Furni ------------------------------------- */
+
+:root[data-theme="light"] {
+  --ground-0: #e4e9e8;
+  --ground-1: #eff2f1;
+  --ground-2: #ffffff;
+  --ground-3: #f5f7f6;
+  --scrim: rgba(47, 47, 47, 0.4);
+
+  --rule: #dce5e4;
+  --rule-firm: #c2cfcc;
+
+  --ink: #2f2f2f;
+  --ink-2: #4a4a4a;
+  --muted: #6a6a6a;
+  --faint: #9aa5a2;
+
+  /* Amber on a light ground needs darkening to stay legible as type. */
+  --amber: #8a6410;
+  --amber-hot: #a2760f;
+  --amber-dim: #6d4f0c;
+  --amber-wash: rgba(249, 191, 41, 0.18);
+  --amber-glow: rgba(249, 191, 41, 0.3);
+  --amber-ink: #ffffff;
+
+  --sage: #3b5d50;
+  --sage-deep: #2c463c;
+  --sage-wash: rgba(59, 93, 80, 0.1);
+
+  --danger: #a3271c;
+  --danger-wash: rgba(163, 39, 28, 0.1);
+
+  /* Same hues; they validate against white too. */
+  --ev-block: #2d90c3;
+  --ev-prolong: #c78200;
+  --ev-sound: #bf6d9b;
+  --ev-word: #007c54;
+  --ev-filler: #b64100;
+  --ev-unsure: #97a49f;
+}
+
+/* System preference, when the user has made no explicit choice. Guarded so an
+ * explicit light choice still beats a dark OS. Dark is already the bare :root
+ * default, so this block only needs to handle the light case. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --ground-0: #e4e9e8;
+    --ground-1: #eff2f1;
+    --ground-2: #ffffff;
+    --ground-3: #f5f7f6;
+    --scrim: rgba(47, 47, 47, 0.4);
+
+    --rule: #dce5e4;
+    --rule-firm: #c2cfcc;
+
+    --ink: #2f2f2f;
+    --ink-2: #4a4a4a;
+    --muted: #6a6a6a;
+    --faint: #9aa5a2;
+
+    --amber: #8a6410;
+    --amber-hot: #a2760f;
+    --amber-dim: #6d4f0c;
+    --amber-wash: rgba(249, 191, 41, 0.18);
+    --amber-glow: rgba(249, 191, 41, 0.3);
+    --amber-ink: #ffffff;
+
+    --sage: #3b5d50;
+    --sage-deep: #2c463c;
+    --sage-wash: rgba(59, 93, 80, 0.1);
+
+    --danger: #a3271c;
+    --danger-wash: rgba(163, 39, 28, 0.1);
+
+    --ev-unsure: #97a49f;
+  }
+}

@@ -87,6 +87,22 @@ export interface SessionSummary {
   title: string | null;
 }
 
+/** One persisted turn, as returned by GET /api/sessions/{id}. */
+export interface TurnOut {
+  id: number;
+  role: Role;
+  mode: Mode;
+  text: string;
+  created_at: string;
+  citations: Citation[];
+  acoustic: AcousticProfile | null;
+  total_ms: number | null;
+}
+
+export interface SessionDetail extends SessionSummary {
+  turns: TurnOut[];
+}
+
 export interface ProgressPoint {
   session_id: string;
   started_at: string;

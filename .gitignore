@@ -46,6 +46,11 @@ data/corpus/**
 !data/corpus/.gitkeep
 !data/corpus/SOURCES.md
 
+# ---- Design references ----
+# Third-party template kept locally as a colour reference only (see
+# design/UI_REBUILD_PROMPT.md). 5.5 MB of Bootstrap we do not ship.
+design/*.zip
+
 # ---- Evaluation runs ----
 # Regenerable, and results.json holds every generation. The baseline table that
 # matters lives in ml/evaluation/README.md.

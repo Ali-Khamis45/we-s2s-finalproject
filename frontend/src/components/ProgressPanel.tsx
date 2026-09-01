@@ -2,14 +2,15 @@ import { useEffect, useState } from "react";
 
 import { api } from "../lib/api";
 import type { ProgressOut, SystemStatus } from "../lib/types";
+import { Panel, Stat } from "./ui/primitives";
 
 /**
- * Practice trends across sessions (A17).
+ * Practice trends across sessions.
  *
- * Framed as change over time, never as an assessment. There is no score and no
- * "good" direction marked on the chart — the point is to let someone see that
- * they have been practising and that their pacing is settling, which is the
- * measurable value the brief asks a product to deliver.
+ * Framed as change over time, never as an assessment. There is no score, no
+ * grade, and deliberately no "good" direction marked on the chart — a
+ * downward-trend style here would turn the dashboard into the scoreboard this
+ * product exists not to be (docs/ETHICS.md).
  */
 export function ProgressPanel({
   status,
@@ -35,26 +36,24 @@ export function ProgressPanel({
   const minutes = Math.round((progress?.total_practice_ms ?? 0) / 60000);
 
   return (
-    <aside className="panel">
-      <section className="panel-block">
-        <h3>Your practice</h3>
+    <>
+      <Panel title="Your practice">
         {points.length === 0 ? (
           <p className="panel-empty">
-            Speak in a session and your pacing trend will build here.
+            Your pacing over time will show up here once you have spoken a little.
           </p>
         ) : (
           <>
             <div className="stat-row">
-              <Stat label="Sessions" value={String(progress?.sessions ?? 0)} />
-              <Stat label="Spoken" value={`${minutes} min`} />
+              <Stat value={String(progress?.sessions ?? 0)} label="Sessions" />
+              <Stat value={`${minutes} min`} label="Spoken" />
             </div>
             <PaceChart points={points} />
           </>
         )}
-      </section>
+      </Panel>
 
-      <section className="panel-block">
-        <h3>System</h3>
+      <Panel title="System">
         <ul className="sys-list">
           <SysRow
             label="Live coach"
@@ -87,17 +86,8 @@ export function ProgressPanel({
             <code>{status?.llm_variant ?? "—"}</code>
           </li>
         </ul>
-      </section>
-    </aside>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="stat">
-      <span className="stat-value">{value}</span>
-      <span className="stat-label">{label}</span>
-    </div>
+      </Panel>
+    </>
   );
 }
 
@@ -115,7 +105,9 @@ function SysRow({
   return (
     <li className="sys-row">
       <span>{label}</span>
+      {/* State is carried by the word, not only by the dot's colour. */}
       <span className={`sys-state ${ok ? "is-ok" : "is-off"}`}>
+        <i className="sys-dot" aria-hidden="true" />
         {ok ? okText : offText}
       </span>
     </li>
@@ -125,9 +117,12 @@ function SysRow({
 /**
  * Speaking pace across sessions.
  *
- * Pace is charted rather than fluency load because it is the metric a speaker
- * can act on directly, and because charting "amount of dysfluency" over time
- * would turn the dashboard into the scoreboard this project deliberately isn't.
+ * Pace rather than fluency load: it is the metric a speaker can act on, and
+ * charting "amount of dysfluency over time" would be a severity score with a
+ * line through it.
+ *
+ * One series, so no legend — the caption names it. Recessive gridlines, a
+ * single emphasised endpoint, and no value printed on every point.
  */
 function PaceChart({ points }: { points: ProgressOut["points"] }) {
   const rates = points
@@ -135,46 +130,62 @@ function PaceChart({ points }: { points: ProgressOut["points"] }) {
     .filter((r): r is number => r !== null);
 
   if (rates.length < 2) {
-    return (
-      <p className="panel-empty">
-        One more session and the pace trend will appear.
-      </p>
-    );
+    return <p className="panel-empty">One more session and the trend appears.</p>;
   }
 
-  const width = 260;
-  const height = 72;
-  const pad = 6;
+  const width = 268;
+  const height = 78;
+  const pad = 8;
   const min = Math.min(...rates) - 8;
   const max = Math.max(...rates) + 8;
   const span = Math.max(max - min, 1);
 
-  const coords = rates.map((r, i) => {
+  const xy = rates.map((r, i) => {
     const x = pad + (i / (rates.length - 1)) * (width - pad * 2);
     const y = height - pad - ((r - min) / span) * (height - pad * 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
+    return [x, y] as const;
   });
 
+  const path = xy.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
   const last = rates[rates.length - 1];
+  const [lx, ly] = xy[xy.length - 1];
+
+  // Rough path length, so the draw-in dash animation covers the whole line.
+  const length = xy.reduce(
+    (sum, [x, y], i) =>
+      i === 0 ? 0 : sum + Math.hypot(x - xy[i - 1][0], y - xy[i - 1][1]),
+    0,
+  );
 
   return (
     <figure className="chart">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img"
-        aria-label={`Speaking pace across ${rates.length} sessions, most recently ${Math.round(last)} words per minute`}>
-        <polyline
-          className="chart-line"
-          points={coords.join(" ")}
-          fill="none"
-          strokeWidth="1.75"
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label={`Speaking pace across ${rates.length} sessions, most recently ${Math.round(last)} words per minute`}
+        style={{ ["--chart-len" as string]: Math.ceil(length + 2) }}
+      >
+        {/* Two recessive gridlines. Enough to read level, not enough to compete. */}
+        {[0.33, 0.67].map((t) => (
+          <line
+            key={t}
+            className="chart-grid"
+            x1={pad}
+            x2={width - pad}
+            y1={pad + t * (height - pad * 2)}
+            y2={pad + t * (height - pad * 2)}
+          />
+        ))}
+        {/* A faint fill under the line gives the series body at this size;
+            two points alone are otherwise a hairline in a lot of space. */}
+        <polygon
+          className="chart-fill"
+          points={`${pad},${height - pad} ${path} ${width - pad},${height - pad}`}
         />
-        <circle
-          className="chart-dot"
-          cx={coords[coords.length - 1].split(",")[0]}
-          cy={coords[coords.length - 1].split(",")[1]}
-          r="3"
-        />
+        <polyline className="chart-line" points={path} />
+        <circle className="chart-dot" cx={lx} cy={ly} r="3.5" />
       </svg>
-      <figcaption>
+      <figcaption className="chart-caption">
         Speaking pace · latest <b>{Math.round(last)} wpm</b>
       </figcaption>
     </figure>

@@ -3,14 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="light dark" />
+    <meta name="color-scheme" content="dark light" />
+    <meta
+      name="description"
+      content="A speaking-practice coach that listens to how you say it, not only what you say. An accessibility tool, not a medical device."
+    />
     <title>Speech Confidence Coach</title>
+
+    <!-- Three families, paired by contrast rather than similarity: an
+         opinionated variable grotesque for display, a neutral workhorse for
+         text, and a technical mono for the numbers. Instrument Serif appears
+         exactly once, in the masthead. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=Instrument+Sans:ital,wght@0,400..600;1,400&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap"
     />
+
+    <!-- Paint the ground before the CSS lands, so there is no white flash on a
+         dark theme. -->
+    <style>
+      html { background: #0e1512; }
+      @media (prefers-color-scheme: light) { html { background: #eff2f1; } }
+    </style>
   </head>
   <body>
     <div id="root"></div>

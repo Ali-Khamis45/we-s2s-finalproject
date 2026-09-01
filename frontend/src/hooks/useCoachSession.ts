@@ -423,6 +423,54 @@ export function useCoachSession() {
     setSpeaking(false);
   }, []);
 
+  /**
+   * Replay a stored session.
+   *
+   * The backend has persisted every turn since the first commit, including the
+   * acoustic profile and citations, but nothing in the UI ever read them back —
+   * so conversation history existed in the database and nowhere a user could
+   * see it. This loads one and continues it: further turns append to the same
+   * session rather than starting a new one.
+   */
+  const loadSession = useCallback(
+    async (id: string) => {
+      await teardown();
+      setError(null);
+      try {
+        const detail = await api.getSession(id);
+        sessionRef.current = detail.id;
+        setSessionId(detail.id);
+        setMessages(
+          detail.turns
+            .filter((t) => t.text.trim())
+            .map((t) => ({
+              id: nextId(),
+              role: t.role,
+              mode: t.mode,
+              text: t.text,
+              acoustic: t.acoustic,
+              citations: t.citations ?? [],
+              totalMs: t.total_ms ?? undefined,
+            })),
+        );
+        pendingCoachRef.current = null;
+      } catch {
+        setError("Couldn't open that session.");
+      }
+    },
+    [teardown],
+  );
+
+  /** Begin a fresh session, leaving the previous one stored. */
+  const newSession = useCallback(async () => {
+    await teardown();
+    setError(null);
+    setMessages([]);
+    pendingCoachRef.current = null;
+    sessionRef.current = null;
+    setSessionId(null);
+  }, [teardown]);
+
   return {
     status,
     sessionId,
@@ -440,6 +488,8 @@ export function useCoachSession() {
     sendText,
     flush,
     interrupt,
+    loadSession,
+    newSession,
     refreshStatus,
     dismissNotice: () => setNotice(null),
     dismissError: () => setError(null),

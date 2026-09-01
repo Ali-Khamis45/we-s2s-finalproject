@@ -1,6 +1,7 @@
 import type {
   Citation,
   ProgressOut,
+  SessionDetail,
   SessionSummary,
   SystemStatus,
 } from "./types";
@@ -50,6 +51,12 @@ export const api = {
   createSession: () => request<SessionSummary>("/api/sessions", { method: "POST" }),
 
   listSessions: () => request<SessionSummary[]>("/api/sessions"),
+
+  /** A past session with all of its turns, for replaying it in the UI. */
+  getSession: (id: string) => request<SessionDetail>(`/api/sessions/${id}`),
+
+  deleteSession: (id: string) =>
+    request<void>(`/api/sessions/${id}`, { method: "DELETE" }),
 
   progress: () => request<ProgressOut>("/api/sessions/progress"),
 

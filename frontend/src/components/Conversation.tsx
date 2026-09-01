@@ -24,13 +24,15 @@ export function Conversation({ messages, speaking }: Props) {
   }
 
   return (
-    <div className="conversation">
-      {messages.map((m) => (
-        <MessageBubble key={m.id} message={m} />
+    // Coach turns are announced politely; a screen reader user should hear the
+    // reply without being interrupted mid-sentence.
+    <div className="conversation" aria-live="polite" aria-relevant="additions text">
+      {messages.map((m, i) => (
+        <MessageBubble key={m.id} message={m} index={i} />
       ))}
       {speaking && (
-        <div className="speaking-hint" aria-live="polite">
-          <span className="speaking-dots">
+        <div className="speaking-hint">
+          <span className="speaking-dots" aria-hidden="true">
             <i /> <i /> <i />
           </span>
           Coach is speaking — just talk to interrupt
@@ -41,11 +43,15 @@ export function Conversation({ messages, speaking }: Props) {
   );
 }
 
-function MessageBubble({ message }: { message: Message }) {
+function MessageBubble({ message, index }: { message: Message; index: number }) {
   const isUser = message.role === "user";
 
   return (
-    <article className={`turn ${isUser ? "turn-user" : "turn-coach"}`}>
+    <article
+      className={`turn ${isUser ? "turn-user" : "turn-coach"}`}
+      // Stagger only the first handful; a long thread should not cascade.
+      style={{ animationDelay: `${Math.min(index, 4) * 40}ms` }}
+    >
       <header className="turn-head">
         <span className="turn-who">{isUser ? "You" : "Coach"}</span>
         <ModeTag mode={message.mode} />
@@ -79,7 +85,7 @@ function MessageBubble({ message }: { message: Message }) {
 
 function ModeTag({ mode }: { mode: Message["mode"] }) {
   const label = mode === "live" ? "live" : mode === "knowledge" ? "grounded" : "typed";
-  return <span className={`mode-tag mode-${mode}`}>{label}</span>;
+  return <span className={`tag tag-${mode}`}>{label}</span>;
 }
 
 function Citations({ citations }: { citations: Citation[] }) {
@@ -121,13 +127,12 @@ function EmptyState() {
     <div className="empty">
       <h2>Ready when you are</h2>
       <p>
-        Press <strong>Start speaking</strong> and just talk — about a presentation
-        you're preparing, an interview coming up, or anything you want to rehearse.
-        The coach listens to how you speak, not only what you say, and slows down
-        when you do.
+        Press start and talk about whatever you need to rehearse — a presentation,
+        an interview, a phone call you have been putting off. The coach listens to
+        how you speak as well as what you say, and slows down when you do.
       </p>
       <p className="empty-note">
-        This is a practice tool, not a clinical one. It doesn't diagnose or assess
+        A practice tool, not a clinical one. It doesn&rsquo;t diagnose or assess
         anyone.
       </p>
     </div>
