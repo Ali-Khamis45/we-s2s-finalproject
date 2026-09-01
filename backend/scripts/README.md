@@ -55,6 +55,68 @@ numbers.
 
 ---
 
+## `fetch_corpus.py`
+
+Builds the knowledge base (A10). `data/corpus/` is gitignored, so this script
+*is* the reproducible record of what the corpus contains.
+
+```bash
+python scripts/fetch_corpus.py --dry-run   # screen only, write nothing
+python scripts/fetch_corpus.py             # download, screen, write
+```
+
+Five public-domain Project Gutenberg books on public speaking and vocal
+delivery, 313,866 words → 1,057 chunks. Full provenance in
+[`data/corpus/SOURCES.md`](../../data/corpus/SOURCES.md).
+
+**It screens for scope, and the screen matters.** Period elocution texts
+sometimes contain chapters on "curing" stammering, written with attitudes that
+are clinical and demeaning by any modern standard — exactly what
+[ETHICS.md](../../docs/ETHICS.md) excludes.
+
+The screen looks for *clustering* of pathologising terms, not raw frequency. An
+earlier version counted "cure", "patient", "treatment" and "defect" too, and
+rejected four of six books — because in 1915 prose those are ordinary words
+("the *treatment* of the subject", "*patient* effort"). It was measuring period
+English, not clinical framing.
+
+It also prints the surrounding text for every hit, because the automation only
+narrows the field. **One book was excluded on human review**: Stratton's
+*Public Speaking* (1920) passed the cluster check but claims a stammerer can be
+"relieved, if not cured… by attention to the position of the vocal organs". A
+false cure claim about the people this tool serves. That exclusion is recorded
+in SOURCES.md and belongs in the report's ethics section.
+
+---
+
+## `calibrate_gate.py`
+
+Re-derives `SCC_RETRIEVAL_MIN_SCORE` against the real corpus. Run after any
+change to the corpus or the embedding model.
+
+```bash
+python scripts/calibrate_gate.py --reingest
+```
+
+**Corpus size moves this threshold, which is the whole reason the script
+exists.** A gate of 0.55 derived from a three-document fixture would have
+answered 3 of 8 out-of-corpus questions once the real books were indexed — a
+larger corpus offers more chances for a spurious high match ("how do I train for
+a marathon" reaches 0.619 against a public-speaking corpus).
+
+Measured over 1,057 chunks:
+
+| Set | min | median | max |
+|---|---|---|---|
+| In corpus (10 questions) | 0.696 | 0.720 | 0.814 |
+| Out of corpus (8 questions) | 0.434 | 0.532 | 0.619 |
+
+At the resulting **0.65**: 0/8 out-of-corpus answered, 0/10 in-corpus refused.
+The threshold sits in the 0.077 gap, nearer the out-of-corpus side on purpose —
+the errors are not symmetric.
+
+---
+
 ## `verify_retrieval.py`
 
 Exercises ingestion, MMR reranking, and — the part that matters — the

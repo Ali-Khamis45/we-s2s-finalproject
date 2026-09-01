@@ -92,19 +92,26 @@ class Settings(BaseSettings):
     # Below this best-match score a question is treated as outside the corpus,
     # and the coach says it has no material rather than inventing an answer.
     #
-    # CALIBRATED, NOT GUESSED. bge embeddings have a high similarity floor —
-    # unrelated text does not score near zero. Measured against a coaching
-    # corpus with bge-small-en-v1.5:
+    # CALIBRATED, NOT GUESSED, and re-derived against the real corpus.
+    # bge embeddings have a high similarity floor — unrelated text does not
+    # score near zero. Measured over 1057 chunks with bge-small-en-v1.5
+    # (backend/scripts/calibrate_gate.py), 10 in-corpus and 8 out-of-corpus
+    # questions:
     #
-    #   "how do I stop speaking too fast"        0.71   in corpus
-    #   "how do I change a diesel oil filter"    0.48   unrelated, but phrased
-    #                                                   as a how-to question
-    #   "what is the capital of Mongolia"        0.35   unrelated
+    #   in corpus       min 0.696   median 0.720   max 0.814
+    #   out of corpus   min 0.434   median 0.532   max 0.619
     #
-    # A gate below ~0.5 therefore admits everything and is no gate at all.
-    # Re-measure once the real corpus exists (A10) and after any change to
-    # `embedding_model` — this number is specific to both.
-    retrieval_min_score: float = 0.55
+    # An earlier 0.55, tuned on a 3-document fixture, would have ANSWERED 3 of
+    # the 8 out-of-corpus questions once the real corpus was indexed: a larger
+    # corpus offers more chances for a spurious high match ("how do I train for
+    # a marathon" reaches 0.619). Corpus size moves this number — always
+    # re-derive, never carry it over.
+    #
+    # 0.65 sits in the 0.077 gap, deliberately nearer the out-of-corpus side.
+    # The errors are not symmetric: refusing a real question costs one unhelpful
+    # turn, while accepting a false one puts confident wrong technique advice in
+    # front of someone practising their speech.
+    retrieval_min_score: float = 0.65
 
     # ---- LLM (cascade, CPU via llama.cpp) ----
     llm_base_url: str = "http://127.0.0.1:8080/v1"

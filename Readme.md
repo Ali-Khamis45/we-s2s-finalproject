@@ -156,9 +156,13 @@ could be built without waiting for SEP-28k, and it is **not citable in the thesi
 `GET /api/status` reports which backend is live, and the trained classifier (M4) drops
 in behind the same interface via `SCC_DYSFLUENCY_MODEL_PATH`.
 
-The **knowledge base is empty** by design — it needs real, attributable, non-clinical
-sources (task A10). Log every document in
-[`data/corpus/SOURCES.md`](data/corpus/SOURCES.md) as you add it.
+The **knowledge base is populated** with a starter corpus: five public-domain books on
+public speaking and vocal delivery, 313,866 words across 1,057 chunks. Rebuild it with
+`python backend/scripts/fetch_corpus.py`, and see
+[`data/corpus/SOURCES.md`](data/corpus/SOURCES.md) for full provenance, the one book
+excluded on ethical review, and the limitations to state in the report — these texts are
+a century old and should be supplemented with modern licensed material before
+submission.
 
 See [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md) for the full task breakdown and the
 week-by-week sequence.
