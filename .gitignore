@@ -1,0 +1,67 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# ---- Node / React ----
+node_modules/
+dist/
+build/
+.vite/
+*.local
+npm-debug.log*
+yarn-error.log*
+
+# ---- Environment & secrets ----
+.env
+.env.*
+!.env.example
+
+# ---- Models & weights (never commit; document how to fetch instead) ----
+*.gguf
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.ckpt
+# Root-scoped: must not swallow backend/app/models/, which is source code.
+/models/
+ml/moshi/weights/
+ml/finetuning/checkpoints/
+ml/finetuning/adapters/
+
+# ---- Data ----
+# SEP-28k audio is fetched from source podcasts, never redistributed.
+data/sep28k/audio/
+data/fluencybank/
+data/chroma/**
+!data/chroma/.gitkeep
+data/corpus/**
+!data/corpus/.gitkeep
+!data/corpus/SOURCES.md
+
+# ---- Runtime artifacts ----
+*.db
+*.sqlite3
+*.wav
+*.mp3
+*.opus
+logs/
+outputs/
+.cache/
+
+# ---- Notebooks ----
+.ipynb_checkpoints/
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

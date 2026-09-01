@@ -1,0 +1,35 @@
+# Training / evaluation environment (Track M).
+#
+# IMPORTANT: install this on Colab T4 / Kaggle 2xT4 (sm_75), NOT on the RTX 5050.
+# bitsandbytes on Blackwell (sm_120) is the most fragile link in the stack — training
+# happens in the cloud, the merged model is converted to GGUF, and only llama.cpp
+# runs locally. See docs/PROJECT_PLAN.md, "GGUF via llama.cpp, never bitsandbytes".
+
+# ---- Core ----
+torch==2.5.1
+transformers==4.47.1
+datasets==3.2.0
+accelerate==1.2.1
+
+# ---- QLoRA fine-tuning (M7) ----
+peft==0.14.0
+bitsandbytes==0.45.0
+trl==0.13.0
+
+# ---- Dysfluency classifier (M4): wav2vec2 + SEP-28k ----
+torchaudio==2.5.1
+librosa==0.10.2.post1
+soundfile==0.12.1
+scikit-learn==1.6.0
+
+# ---- Evaluation (M9, M10, M12) ----
+evaluate==0.4.3
+rouge-score==0.1.2
+bert-score==0.3.13
+pandas==2.2.3
+matplotlib==3.10.0
+
+# ---- Dataset acquisition (M3) ----
+yt-dlp==2024.12.13
+requests==2.32.3
+tqdm==4.67.1
