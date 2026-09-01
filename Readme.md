@@ -113,12 +113,18 @@ Each is independent — the app degrades cleanly with any of them missing.
 ### Tests
 
 ```bash
-cd backend && .venv\Scripts\python -m pytest
+cd backend && .venv\Scripts\python -m pytest    # 35 tests
+cd frontend && npm test                          # 30 tests
 ```
 
-The suite runs without any model present, which is the point: it covers routing,
+The backend suite runs without any model present, which is the point: it covers routing,
 persistence, the acoustic contract, and — most importantly — that the product still
-works when the flagship is down.
+works when the flagship is down. The frontend suite covers the timeline geometry, the
+gapless audio scheduling, and the API error envelope.
+
+Beyond the unit tests, [`backend/scripts/`](backend/scripts/) holds verification scripts
+that run the real models against known inputs and reproduce every measurement quoted in
+the report.
 
 ### Training environment (Track M)
 
@@ -146,7 +152,9 @@ Two figures worth knowing before reading further, both measured rather than esti
   Whisper is the dominant cost. The live path's ~200 ms is unchanged, so the gap the
   thesis measures is wider than expected, not narrower.
 
-The demo walkthrough is in [`docs/DEMO.md`](docs/DEMO.md).
+The project report is in [`docs/REPORT.md`](docs/REPORT.md) and the demo walkthrough in
+[`docs/DEMO.md`](docs/DEMO.md). Sections of the report owned by the model track are
+marked `[TRACK M]` with the command that produces each set of numbers.
 
 Two things are stubs waiting on Track M. The **live coach** needs the Moshi service
 (M2) — the client is written and the app falls back automatically until it exists. The
