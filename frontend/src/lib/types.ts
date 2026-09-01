@@ -1,60 +1,79 @@
-/** Mirrors backend/app/schemas — keep the two in step. */
+/**
+ * The shared vocabulary between the two halves of the project.
+ *
+ * Everything the API returns is **derived from the backend's own OpenAPI
+ * schema**, not transcribed by hand. This file used to be a manual copy of
+ * `backend/app/schemas/chat.py`, which meant a backend rename was caught by
+ * nobody until something rendered blank — exactly how `TurnOut.timings` stayed
+ * missing from the client for weeks.
+ *
+ * Regenerate after any backend schema change:
+ *
+ *     make types        (python backend/scripts/dump_openapi.py && openapi-typescript)
+ *
+ * CI runs the same command and fails on a diff, so drift cannot be merged.
+ *
+ * Only types the API does not describe are written by hand below, and each one
+ * says why.
+ */
 
-export type DysfluencyKind =
-  | "block"
-  | "prolongation"
-  | "sound_repetition"
-  | "word_repetition"
-  | "interjection"
-  | "unsure";
+import type { components } from "./api-types.gen";
 
-export interface DysfluencyEvent {
-  kind: DysfluencyKind;
-  start_ms: number;
-  end_ms: number;
-  confidence: number;
-  duration_ms: number;
+type S = components["schemas"];
+
+// ---- generated, one source of truth --------------------------------------
+
+/**
+ * Left exactly as the schema describes them, optional fields included.
+ *
+ * Tightening these was tempting and wrong: the same profile appears nested
+ * inside `TurnOut.acoustic`, where it is the raw shape, so a tightened alias
+ * would not be assignable to itself. More importantly, the schema is telling
+ * the truth — `events` genuinely has a default and a caller should cope with
+ * its absence rather than assume a server behaviour that is not guaranteed.
+ * Call sites use `?? []`.
+ */
+export type DysfluencyEvent = S["DysfluencyEvent"];
+export type ProsodyMetrics = S["ProsodyMetrics"];
+export type AcousticProfile = S["AcousticProfile"];
+export type Citation = S["Citation"];
+export type StageTiming = S["StageTiming"];
+export type TurnOut = S["TurnOut"];
+export type SessionSummary = S["SessionOut"];
+export type SessionDetail = S["SessionDetail"];
+export type ProgressPoint = S["ProgressPoint"];
+export type ProgressOut = S["ProgressOut"];
+export type UserOut = S["UserOut"];
+export type AuthResponse = S["AuthResponse"];
+export type ChatResponse = S["ChatResponse"];
+
+/** The enums arrive as string unions, which is what the UI wants anyway. */
+export type Mode = S["Mode"];
+export type Role = S["Role"];
+export type DysfluencyKind = S["DysfluencyEvent"]["kind"];
+
+// ---- hand-written, and why -----------------------------------------------
+
+/**
+ * `GET /api/status` returns `dict[str, Any]`, so OpenAPI describes it as an
+ * open object and generation gives us nothing useful. Typed here instead;
+ * a contract test asserts the real response still matches these keys.
+ */
+export interface SystemStatus {
+  live_available: boolean;
+  llm_reachable: boolean;
+  stt_loaded: boolean;
+  corpus_chunks: number;
+  analyzer: string;
+  prompt_version: string;
+  llm_variant: string;
 }
 
-export interface ProsodyMetrics {
-  speech_rate_wpm: number | null;
-  articulation_rate_sps: number | null;
-  mean_pause_ms: number | null;
-  longest_pause_ms: number | null;
-  pitch_mean_hz: number | null;
-  pitch_variation: number | null;
-  energy_variation: number | null;
-}
-
-export interface AcousticProfile {
-  schema_version: string;
-  duration_ms: number;
-  events: DysfluencyEvent[];
-  prosody: ProsodyMetrics;
-  analyzed: boolean;
-  source: string;
-  event_counts: Record<string, number>;
-  dysfluent_ms: number;
-  fluency_load: number;
-  dominant_event: string | null;
-}
-
-export interface Citation {
-  source: string;
-  title: string | null;
-  chunk_index: number | null;
-  score: number | null;
-  excerpt: string;
-}
-
-export type Mode = "live" | "knowledge" | "text";
-export type Role = "user" | "coach";
-
-export interface StageTiming {
-  stage: string;
-  ms: number;
-}
-
+/**
+ * A turn as the UI holds it. Not an API type: it merges what arrived over HTTP
+ * with what arrived over the WebSocket, and carries render-only state such as
+ * `pending`.
+ */
 export interface Message {
   id: string;
   role: Role;
@@ -67,69 +86,6 @@ export interface Message {
   timings?: StageTiming[];
   totalMs?: number;
   grounded?: boolean;
-}
-
-export interface SystemStatus {
-  live_available: boolean;
-  llm_reachable: boolean;
-  stt_loaded: boolean;
-  corpus_chunks: number;
-  analyzer: string;
-  prompt_version: string;
-  llm_variant: string;
-}
-
-export interface UserOut {
-  id: string;
-  email: string;
-  display_name: string | null;
-  created_at: string;
-  memory_enabled: boolean;
-}
-
-export interface AuthResponse {
-  access_token: string;
-  expires_in: number;
-  user: UserOut;
-}
-
-export interface SessionSummary {
-  id: string;
-  started_at: string;
-  ended_at: string | null;
-  turn_count: number;
-  title: string | null;
-}
-
-/** One persisted turn, as returned by GET /api/sessions/{id}. */
-export interface TurnOut {
-  id: number;
-  role: Role;
-  mode: Mode;
-  text: string;
-  created_at: string;
-  citations: Citation[];
-  acoustic: AcousticProfile | null;
-  timings: StageTiming[];
-  total_ms: number | null;
-}
-
-export interface SessionDetail extends SessionSummary {
-  turns: TurnOut[];
-}
-
-export interface ProgressPoint {
-  session_id: string;
-  started_at: string;
-  mean_fluency_load: number;
-  mean_speech_rate_wpm: number | null;
-  spoken_turns: number;
-}
-
-export interface ProgressOut {
-  points: ProgressPoint[];
-  sessions: number;
-  total_practice_ms: number;
 }
 
 /** Human labels. The UI never shows a raw enum value. */

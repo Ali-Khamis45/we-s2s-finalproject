@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useRef, useState } from "react";
 
 import { MicrophoneCapture } from "../audio/capture";
 import { StreamPlayer } from "../audio/player";
 import { api, wsUrl } from "../lib/api";
 import { fetchWsTicket } from "../lib/auth";
+import { errorMessage, parseServerFrame } from "../lib/protocol";
 import type {
   AcousticProfile,
   Citation,
@@ -32,7 +33,7 @@ const nextId = () => `m${++messageSeq}`;
  * between the two modes.
  *
  * The mode switch is the part worth understanding. Live Coach is preferred
- * because it answers in ~200 ms, but it cannot retrieve — so when the server
+ * because it answers in ~200 ms, but it cannot retrieve â€” so when the server
  * flags a turn as needing reference material, this reconnects on the knowledge
  * socket, replays the question there, and reports the switch to the user. The
  * conversation is one thread throughout; the server keeps both modes writing
@@ -152,13 +153,12 @@ export function useCoachSession() {
 
   const handleFrame = useCallback(
     (raw: string, activeMode: Mode) => {
-      let frame: { type: string; data: Record<string, unknown> };
-      try {
-        frame = JSON.parse(raw);
-      } catch {
-        return;
-      }
-      const data = frame.data ?? {};
+      // Validated against the protocol union. An unparseable or unknown frame
+      // is ignored rather than thrown, so a socket carrying live audio is
+      // never torn down by one malformed message.
+      const frame = parseServerFrame(raw);
+      if (!frame) return;
+      const data = frame.data as Record<string, unknown>;
 
       switch (frame.type) {
         case "ready":
@@ -210,7 +210,7 @@ export function useCoachSession() {
 
         case "acoustic": {
           const profile = data as unknown as AcousticProfile;
-          // Attach to the most recent user message — the one it describes.
+          // Attach to the most recent user message â€” the one it describes.
           setMessages((prev) => {
             for (let i = prev.length - 1; i >= 0; i--) {
               if (prev[i].role === "user" && !prev[i].acoustic) {
@@ -266,7 +266,7 @@ export function useCoachSession() {
         }
 
         case "error": {
-          setError(String(data.message ?? "Something went wrong."));
+          setError(errorMessage(data.code as string | undefined, String(data.message ?? "Something went wrong.")));
           finalizeCoach();
           break;
         }
@@ -330,7 +330,7 @@ export function useCoachSession() {
           setListening(true);
         } catch {
           setError(
-            "Microphone access was blocked. You can still type — allow the mic to speak.",
+            "Microphone access was blocked. You can still type â€” allow the mic to speak.",
           );
         }
       };
@@ -438,7 +438,7 @@ export function useCoachSession() {
    * Replay a stored session.
    *
    * The backend has persisted every turn since the first commit, including the
-   * acoustic profile and citations, but nothing in the UI ever read them back —
+   * acoustic profile and citations, but nothing in the UI ever read them back â€”
    * so conversation history existed in the database and nowhere a user could
    * see it. This loads one and continues it: further turns append to the same
    * session rather than starting a new one.
@@ -452,7 +452,7 @@ export function useCoachSession() {
         sessionRef.current = detail.id;
         setSessionId(detail.id);
         setMessages(
-          detail.turns
+          (detail.turns ?? [])
             .filter((t) => t.text.trim())
             .map((t) => ({
               id: nextId(),
@@ -510,3 +510,5 @@ export function useCoachSession() {
     dismissError: () => setError(null),
   };
 }
+
+

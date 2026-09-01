@@ -1,0 +1,2139 @@
+{
+  "components": {
+    "schemas": {
+      "AcousticProfile": {
+        "description": "Everything the acoustic branch knows about one user utterance.",
+        "properties": {
+          "analyzed": {
+            "default": false,
+            "title": "Analyzed",
+            "type": "boolean"
+          },
+          "dominant_event": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The event kind that occupied the most time.\n\nWeighted by duration, not by count. Counting would let three 400 ms\nrepetitions outvote a single 1.5 s block, and the coach would be told\nto watch for repeated words when what actually happened is that the\nspeaker got stuck \u2014 the one situation where \"give them room, do not\nfill the pause\" matters most. Time occupied is the better proxy for\nwhat dominated the utterance, and it still surfaces filler guidance for\nsomeone whose speech is mostly interjections.",
+            "readOnly": true,
+            "title": "Dominant Event"
+          },
+          "duration_ms": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Duration Ms",
+            "type": "integer"
+          },
+          "dysfluent_ms": {
+            "description": "Total time occupied by detected events.\n\nOverlapping events are merged so two detectors firing on one moment do\nnot double-count it.",
+            "readOnly": true,
+            "title": "Dysfluent Ms",
+            "type": "integer"
+          },
+          "event_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "readOnly": true,
+            "title": "Event Counts",
+            "type": "object"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/DysfluencyEvent"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "fluency_load": {
+            "description": "Share of the utterance occupied by dysfluency events, 0.0\u20131.0.\n\nDeliberately *not* a severity score. It drives one thing: how far the\ncoach slows its own voice. See `suggested_speech_rate`.",
+            "readOnly": true,
+            "title": "Fluency Load",
+            "type": "number"
+          },
+          "prosody": {
+            "$ref": "#/components/schemas/ProsodyMetrics"
+          },
+          "schema_version": {
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "source": {
+            "default": "unavailable",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_counts",
+          "dysfluent_ms",
+          "fluency_load",
+          "dominant_event"
+        ],
+        "title": "AcousticProfile",
+        "type": "object"
+      },
+      "AuthResponse": {
+        "description": "The access token is returned in the body, never set as a cookie.\n\nIt is held in memory by the client and dies with the tab; the refresh\ntoken is the HttpOnly cookie, and is the only thing that survives a reload.",
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserOut"
+          }
+        },
+        "required": [
+          "access_token",
+          "expires_in",
+          "user"
+        ],
+        "title": "AuthResponse",
+        "type": "object"
+      },
+      "Body_analyze_api_analyze_post": {
+        "properties": {
+          "audio": {
+            "contentMediaType": "application/octet-stream",
+            "title": "Audio",
+            "type": "string"
+          }
+        },
+        "required": [
+          "audio"
+        ],
+        "title": "Body_analyze_api_analyze_post",
+        "type": "object"
+      },
+      "Body_chat_audio_api_chat_audio_post": {
+        "properties": {
+          "audio": {
+            "contentMediaType": "application/octet-stream",
+            "description": "Mono WAV",
+            "title": "Audio",
+            "type": "string"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          }
+        },
+        "required": [
+          "audio"
+        ],
+        "title": "Body_chat_audio_api_chat_audio_post",
+        "type": "object"
+      },
+      "ChatRequest": {
+        "properties": {
+          "llm_variant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Variant"
+          },
+          "message": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "skip_retrieval": {
+            "default": false,
+            "title": "Skip Retrieval",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "ChatRequest",
+        "type": "object"
+      },
+      "ChatResponse": {
+        "properties": {
+          "acoustic": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AcousticProfile"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "grounded": {
+            "default": true,
+            "title": "Grounded",
+            "type": "boolean"
+          },
+          "llm_variant": {
+            "default": "base",
+            "title": "Llm Variant",
+            "type": "string"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/Mode"
+          },
+          "reply": {
+            "title": "Reply",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "timings": {
+            "items": {
+              "$ref": "#/components/schemas/StageTiming"
+            },
+            "title": "Timings",
+            "type": "array"
+          },
+          "total_ms": {
+            "default": 0.0,
+            "title": "Total Ms",
+            "type": "number"
+          },
+          "turn_id": {
+            "title": "Turn Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "session_id",
+          "turn_id",
+          "mode",
+          "reply"
+        ],
+        "title": "ChatResponse",
+        "type": "object"
+      },
+      "Citation": {
+        "description": "One retrieved chunk backing a claim in the reply.",
+        "properties": {
+          "chunk_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chunk Index"
+          },
+          "excerpt": {
+            "default": "",
+            "title": "Excerpt",
+            "type": "string"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "title": "Citation",
+        "type": "object"
+      },
+      "DeleteAccountRequest": {
+        "properties": {
+          "current_password": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Current Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_password"
+        ],
+        "title": "DeleteAccountRequest",
+        "type": "object"
+      },
+      "DysfluencyEvent": {
+        "description": "One detected acoustic event, located in time within the utterance.",
+        "properties": {
+          "confidence": {
+            "default": 1.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "duration_ms": {
+            "readOnly": true,
+            "title": "Duration Ms",
+            "type": "integer"
+          },
+          "end_ms": {
+            "minimum": 0.0,
+            "title": "End Ms",
+            "type": "integer"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/DysfluencyKind"
+          },
+          "start_ms": {
+            "minimum": 0.0,
+            "title": "Start Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "start_ms",
+          "end_ms",
+          "duration_ms"
+        ],
+        "title": "DysfluencyEvent",
+        "type": "object"
+      },
+      "DysfluencyKind": {
+        "description": "The five SEP-28k event classes, plus a catch-all.\n\nNames mirror the SEP-28k label set so Track M's training code and this\nschema stay in step without a translation table.",
+        "enum": [
+          "block",
+          "prolongation",
+          "sound_repetition",
+          "word_repetition",
+          "interjection",
+          "unsure"
+        ],
+        "title": "DysfluencyKind",
+        "type": "string"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "LoginRequest": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginRequest",
+        "type": "object"
+      },
+      "Mode": {
+        "description": "Which path produced a turn.",
+        "enum": [
+          "live",
+          "knowledge",
+          "text"
+        ],
+        "title": "Mode",
+        "type": "string"
+      },
+      "PasswordChangeRequest": {
+        "properties": {
+          "current_password": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Current Password",
+            "type": "string"
+          },
+          "new_password": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "New Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "title": "PasswordChangeRequest",
+        "type": "object"
+      },
+      "ProgressOut": {
+        "properties": {
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/ProgressPoint"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "sessions": {
+            "default": 0,
+            "title": "Sessions",
+            "type": "integer"
+          },
+          "total_practice_ms": {
+            "default": 0,
+            "title": "Total Practice Ms",
+            "type": "integer"
+          }
+        },
+        "title": "ProgressOut",
+        "type": "object"
+      },
+      "ProgressPoint": {
+        "properties": {
+          "mean_fluency_load": {
+            "title": "Mean Fluency Load",
+            "type": "number"
+          },
+          "mean_speech_rate_wpm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Speech Rate Wpm"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "spoken_turns": {
+            "title": "Spoken Turns",
+            "type": "integer"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "started_at",
+          "mean_fluency_load",
+          "spoken_turns"
+        ],
+        "title": "ProgressPoint",
+        "type": "object"
+      },
+      "ProsodyMetrics": {
+        "description": "Continuous delivery measurements over the whole utterance.\n\nThese carry the information a transcript cannot: how fast, how evenly, and\nwith how much pitch movement the speaker delivered the words.",
+        "properties": {
+          "articulation_rate_sps": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Articulation Rate Sps"
+          },
+          "energy_variation": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Energy Variation"
+          },
+          "longest_pause_ms": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longest Pause Ms"
+          },
+          "mean_pause_ms": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Pause Ms"
+          },
+          "pitch_mean_hz": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pitch Mean Hz"
+          },
+          "pitch_variation": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pitch Variation"
+          },
+          "speech_rate_wpm": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speech Rate Wpm"
+          }
+        },
+        "title": "ProsodyMetrics",
+        "type": "object"
+      },
+      "RegisterRequest": {
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "RegisterRequest",
+        "type": "object"
+      },
+      "RenameRequest": {
+        "properties": {
+          "title": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "RenameRequest",
+        "type": "object"
+      },
+      "Role": {
+        "enum": [
+          "user",
+          "coach"
+        ],
+        "title": "Role",
+        "type": "string"
+      },
+      "SessionDetail": {
+        "properties": {
+          "ended_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "turn_count": {
+            "default": 0,
+            "title": "Turn Count",
+            "type": "integer"
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/TurnOut"
+            },
+            "title": "Turns",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "started_at"
+        ],
+        "title": "SessionDetail",
+        "type": "object"
+      },
+      "SessionMetrics": {
+        "description": "Aggregates behind the progress dashboard (A17).\n\nFramed as practice trends, never as an assessment (docs/ETHICS.md).",
+        "properties": {
+          "event_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Event Counts",
+            "type": "object"
+          },
+          "mean_fluency_load": {
+            "default": 0.0,
+            "title": "Mean Fluency Load",
+            "type": "number"
+          },
+          "mean_speech_rate_wpm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Speech Rate Wpm"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "spoken_turns": {
+            "default": 0,
+            "title": "Spoken Turns",
+            "type": "integer"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "total_speech_ms": {
+            "default": 0,
+            "title": "Total Speech Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "session_id",
+          "started_at"
+        ],
+        "title": "SessionMetrics",
+        "type": "object"
+      },
+      "SessionOut": {
+        "properties": {
+          "ended_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "turn_count": {
+            "default": 0,
+            "title": "Turn Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "started_at"
+        ],
+        "title": "SessionOut",
+        "type": "object"
+      },
+      "StageTiming": {
+        "description": "Per-stage latency, collected for M10 and M12.\n\n`stage` stays a plain string rather than the enum: a turn stored before a\nstage was named should still deserialise, and an unknown label is better\nrendered as \"other\" than raised as a validation error on someone's history.",
+        "properties": {
+          "ms": {
+            "title": "Ms",
+            "type": "number"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage",
+          "ms"
+        ],
+        "title": "StageTiming",
+        "type": "object"
+      },
+      "TurnOut": {
+        "properties": {
+          "acoustic": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AcousticProfile"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/Mode"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "timings": {
+            "items": {
+              "$ref": "#/components/schemas/StageTiming"
+            },
+            "title": "Timings",
+            "type": "array"
+          },
+          "total_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Ms"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "mode",
+          "text",
+          "created_at"
+        ],
+        "title": "TurnOut",
+        "type": "object"
+      },
+      "UpdateMeRequest": {
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "memory_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Enabled"
+          }
+        },
+        "title": "UpdateMeRequest",
+        "type": "object"
+      },
+      "UserOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "memory_enabled": {
+            "title": "Memory Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "display_name",
+          "created_at",
+          "memory_enabled"
+        ],
+        "title": "UserOut",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "WsTicketOut": {
+        "properties": {
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "ticket": {
+            "title": "Ticket",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticket",
+          "expires_in"
+        ],
+        "title": "WsTicketOut",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "A native speech-to-speech coach for building communication confidence. Accessibility tool, not a medical device \u00e2\u20ac\u201d see docs/ETHICS.md.",
+    "title": "Speech Confidence Coach",
+    "version": "contract"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/analyze": {
+      "post": {
+        "description": "Transcribe and analyze without generating a reply.\n\nThis is the endpoint that makes the project's central claim inspectable\nside by side: `transcript` is what a conventional pipeline would have kept,\n`acoustic` is everything it would have thrown away.",
+        "operationId": "analyze_api_analyze_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_analyze_api_analyze_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Analyze Api Analyze Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Analyze",
+        "tags": [
+          "chat",
+          "acoustic"
+        ]
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "operationId": "login_api_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Login",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "operationId": "logout_api_auth_logout_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Logout",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/logout-all": {
+      "post": {
+        "operationId": "logout_all_api_auth_logout_all_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Logout All",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/me": {
+      "delete": {
+        "description": "Hard delete. No `is_deleted` flag.\n\nSomeone asking to be erased is not asking to be hidden. Turns are removed\nexplicitly because SQLite does not enforce ON DELETE CASCADE unless foreign\nkeys are switched on per connection, and relying on that would leave\norphaned transcripts behind.",
+        "operationId": "delete_me_api_auth_me_delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteAccountRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Me",
+        "tags": [
+          "auth"
+        ]
+      },
+      "get": {
+        "operationId": "me_api_auth_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Me",
+        "tags": [
+          "auth"
+        ]
+      },
+      "patch": {
+        "operationId": "update_me_api_auth_me_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Me",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/me/export": {
+      "get": {
+        "description": "Everything this account owns, and nothing else.",
+        "operationId": "export_me_api_auth_me_export_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Export Me Api Auth Me Export Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export Me",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/me/password": {
+      "post": {
+        "operationId": "change_password_api_auth_me_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordChangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Change Password",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "operationId": "refresh_api_auth_refresh_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Refresh",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "operationId": "register_api_auth_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Register",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/ws-ticket": {
+      "post": {
+        "description": "A short-lived, single-use ticket for opening a WebSocket.\n\nBrowsers cannot set headers on a WebSocket, and a JWT in the query string\nwould be written into access logs and browser history. This is neither: it\nis worthless 30 seconds after issue and worthless after one use.",
+        "operationId": "ws_ticket_api_auth_ws_ticket_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WsTicketOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ws Ticket",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/chat": {
+      "post": {
+        "description": "One typed turn through the cascade.",
+        "operationId": "chat_api_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Chat",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
+    "/api/chat/audio": {
+      "post": {
+        "description": "One spoken turn, uploaded rather than streamed.\n\nThe streaming socket is the real interface; this is the one that is easy to\ndrive from a script, which makes it what the evaluation harness and the\nacoustic-analyzer tests use.",
+        "operationId": "chat_audio_api_chat_audio_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_chat_audio_api_chat_audio_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Chat Audio",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
+    "/api/corpus": {
+      "get": {
+        "operationId": "corpus_status_api_corpus_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Corpus Status Api Corpus Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Corpus Status",
+        "tags": [
+          "corpus"
+        ]
+      }
+    },
+    "/api/corpus/ingest": {
+      "post": {
+        "operationId": "ingest_api_corpus_ingest_post",
+        "parameters": [
+          {
+            "description": "Drop the existing index first. Use after removing documents.",
+            "in": "query",
+            "name": "reset",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Drop the existing index first. Use after removing documents.",
+              "title": "Reset",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Ingest Api Corpus Ingest Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ingest",
+        "tags": [
+          "corpus"
+        ]
+      }
+    },
+    "/api/corpus/manifest": {
+      "get": {
+        "description": "What is indexed, by source.\n\nReconcile this against data/corpus/SOURCES.md before writing the report: a\ndocument indexed but unlogged has no provenance, and one logged but\nunindexed is backing no answer.",
+        "operationId": "manifest_api_corpus_manifest_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Manifest Api Corpus Manifest Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Manifest",
+        "tags": [
+          "corpus"
+        ]
+      }
+    },
+    "/api/corpus/search": {
+      "get": {
+        "description": "Query retrieval directly.\n\nThe fastest way to check whether a poor answer came from bad retrieval or\nbad generation, which is otherwise hard to tell apart.",
+        "operationId": "search_api_corpus_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "minLength": 2,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "k",
+            "required": false,
+            "schema": {
+              "default": 4,
+              "maximum": 20,
+              "minimum": 1,
+              "title": "K",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Citation"
+                  },
+                  "title": "Response Search Api Corpus Search Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Search",
+        "tags": [
+          "corpus"
+        ]
+      }
+    },
+    "/api/schema/acoustic": {
+      "get": {
+        "description": "The S1/M5 contract, served as JSON Schema.\n\nTrack M validates the classifier's output against this, so the two tracks\ncannot drift apart without a test failing.",
+        "operationId": "acoustic_schema_api_schema_acoustic_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Acoustic Schema Api Schema Acoustic Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Acoustic Schema",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/sessions": {
+      "get": {
+        "operationId": "list_sessions_api_sessions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SessionOut"
+                  },
+                  "title": "Response List Sessions Api Sessions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Sessions",
+        "tags": [
+          "sessions"
+        ]
+      },
+      "post": {
+        "operationId": "create_session_api_sessions_post",
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Session",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
+    "/api/sessions/progress": {
+      "get": {
+        "description": "Trend across this account's recent sessions.\n\nRegistered before `/{session_id}` so the literal path is not captured by\nthe parameterised route.",
+        "operationId": "progress_api_sessions_progress_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProgressOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Progress",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
+    "/api/sessions/{session_id}": {
+      "delete": {
+        "operationId": "delete_session_api_sessions__session_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Session",
+        "tags": [
+          "sessions"
+        ]
+      },
+      "get": {
+        "operationId": "get_session_api_sessions__session_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Session",
+        "tags": [
+          "sessions"
+        ]
+      },
+      "patch": {
+        "operationId": "rename_session_api_sessions__session_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rename Session",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
+    "/api/sessions/{session_id}/end": {
+      "post": {
+        "operationId": "end_session_api_sessions__session_id__end_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "End Session",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
+    "/api/sessions/{session_id}/metrics": {
+      "get": {
+        "operationId": "session_metrics_api_sessions__session_id__metrics_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionMetrics"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Session Metrics",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
+    "/api/status": {
+      "get": {
+        "description": "What the system can actually do right now.\n\nThe UI reads this on load to decide whether to offer the live coach, and it\nis the fastest way to see which half of the stack is up.",
+        "operationId": "status_api_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Status Api Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Status",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "description": "Liveness. Deliberately cheap \u2014 no model is touched.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Health Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "health"
+        ]
+      }
+    }
+  }
+}

@@ -152,7 +152,7 @@ function Citations({ citations }: { citations: Citation[] }) {
             <li key={`${c.source}-${c.chunk_index ?? i}`}>
               <div className="citation-head">
                 <span className="citation-title">{c.title ?? c.source}</span>
-                {c.score !== null && (
+                {c.score != null && (
                   <span className="citation-score">{c.score.toFixed(2)}</span>
                 )}
               </div>

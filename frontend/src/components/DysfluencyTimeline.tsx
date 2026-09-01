@@ -47,7 +47,7 @@ export function DysfluencyTimeline({ profile, compact = false }: Props) {
 
   const events = useMemo(
     () =>
-      profile.events
+      (profile.events ?? [])
         .map((e, i) => ({
           ...e,
           index: i,
@@ -59,7 +59,7 @@ export function DysfluencyTimeline({ profile, compact = false }: Props) {
   );
 
   const kinds = useMemo(
-    () => Object.keys(profile.event_counts) as DysfluencyKind[],
+    () => Object.keys(profile.event_counts ?? {}) as DysfluencyKind[],
     [profile.event_counts],
   );
 
@@ -139,21 +139,23 @@ function ProsodyRow({ profile }: { profile: AcousticProfile }) {
   const { prosody } = profile;
   const stats: Array<{ label: string; value: string }> = [];
 
-  if (prosody.speech_rate_wpm !== null) {
-    stats.push({ label: "Pace", value: `${Math.round(prosody.speech_rate_wpm)} wpm` });
+  // `!= null` rather than `!== null`: the schema allows undefined as well as
+  // null, and a missing measurement and an absent one mean the same thing here.
+  // `prosody` itself is optional, so it is read through the profile each time.
+  const wpm = prosody?.speech_rate_wpm;
+  const pause = prosody?.longest_pause_ms;
+  const pitch = prosody?.pitch_variation;
+
+  if (wpm != null) {
+    stats.push({ label: "Pace", value: `${Math.round(wpm)} wpm` });
   }
-  if (prosody.longest_pause_ms !== null && prosody.longest_pause_ms > 0) {
-    stats.push({ label: "Longest pause", value: formatMs(prosody.longest_pause_ms) });
+  if (pause != null && pause > 0) {
+    stats.push({ label: "Longest pause", value: formatMs(pause) });
   }
-  if (prosody.pitch_variation !== null) {
+  if (pitch != null) {
     stats.push({
       label: "Delivery",
-      value:
-        prosody.pitch_variation < 0.1
-          ? "flat"
-          : prosody.pitch_variation > 0.45
-            ? "strained"
-            : "steady",
+      value: pitch < 0.1 ? "flat" : pitch > 0.45 ? "strained" : "steady",
     });
   }
   // Source is shown so heuristic output is never mistaken for the trained

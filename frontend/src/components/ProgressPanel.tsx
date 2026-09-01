@@ -131,7 +131,7 @@ function SysRow({
  * One series, so no legend â€” the caption names it. Recessive gridlines, a
  * single emphasised endpoint, and no value printed on every point.
  */
-function PaceChart({ points }: { points: ProgressOut["points"] }) {
+function PaceChart({ points }: { points: NonNullable<ProgressOut["points"]> }) {
   const rates = points
     .map((p) => p.mean_speech_rate_wpm)
     .filter((r): r is number => r !== null);
@@ -198,4 +198,5 @@ function PaceChart({ points }: { points: ProgressOut["points"] }) {
     </figure>
   );
 }
+
 
