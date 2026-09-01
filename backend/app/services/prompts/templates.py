@@ -23,7 +23,12 @@ from app.schemas.chat import Citation, Role
 from app.services.llm import Message
 from app.services.prompts import exemplars
 
-PROMPT_VERSION = "a12-v3"
+#: v4: moved the per-turn coaching directive out of the <acoustic_context>
+#: block and into the system message. Evaluation showed the model reciting the
+#: guidance back to the user — "give them room, don't fill the pause" said TO
+#: the person who was speaking. Content in the user turn gets relayed;
+#: instructions belong in the system role.
+PROMPT_VERSION = "a12-v4"
 
 SYSTEM_PROMPT = """\
 You are a speaking-practice coach. You help people who experience speech \
@@ -167,6 +172,15 @@ def build(
     system = SYSTEM_PROMPT
     if citations:
         system = f"{system}\n\n{GROUNDED_INSTRUCTION}"
+
+    # The per-turn acoustic directive goes in the SYSTEM message, not alongside
+    # the observations in the user turn. Phrased as a rule and placed here, the
+    # model applies it; placed in the user turn it gets recited back.
+    if acoustic is not None and (directive := acoustic.coaching_directive()):
+        system = (
+            f"{system}\n\nFOR THIS TURN ONLY — how to respond, never something "
+            f"to say out loud:\n{directive}"
+        )
 
     messages: list[Message] = [Message(role="system", content=system)]
 

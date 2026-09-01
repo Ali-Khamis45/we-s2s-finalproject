@@ -46,6 +46,11 @@ data/corpus/**
 !data/corpus/.gitkeep
 !data/corpus/SOURCES.md
 
+# ---- Evaluation runs ----
+# Regenerable, and results.json holds every generation. The baseline table that
+# matters lives in ml/evaluation/README.md.
+ml/evaluation/results*/
+
 # ---- Runtime artifacts ----
 *.db
 *.sqlite3

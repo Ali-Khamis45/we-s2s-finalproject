@@ -120,7 +120,39 @@ class TestPromptBlock:
         assert "<acoustic_context>" in block and "</acoustic_context>" in block
         assert "block x1" in block
         assert "82 wpm" in block
-        assert "do not fill the pause" in block
+
+    def test_guidance_is_not_in_the_user_facing_block(self):
+        """Regression: the model recited the guidance back to the speaker.
+
+        Anything in the user turn reads as content to relay. The directive is
+        an instruction about how to respond, so it belongs in the system role —
+        see PROMPT_VERSION a12-v4.
+        """
+        p = profile(
+            events=[
+                DysfluencyEvent(kind=DysfluencyKind.BLOCK, start_ms=0, end_ms=1_400)
+            ]
+        )
+        block = p.to_prompt_block()
+        assert "do not fill the pause" not in block.lower()
+        assert "guidance:" not in block.lower()
+
+        directive = p.coaching_directive()
+        assert directive is not None
+        assert "do not fill the pause" in directive.lower()
+
+    def test_directive_follows_the_dominant_event(self):
+        p = profile(
+            events=[
+                DysfluencyEvent(
+                    kind=DysfluencyKind.INTERJECTION, start_ms=0, end_ms=900
+                )
+            ]
+        )
+        assert "filler" in (p.coaching_directive() or "").lower()
+
+    def test_unanalyzed_profile_has_no_directive(self):
+        assert AcousticProfile.unavailable().coaching_directive() is None
 
     def test_fluent_turn_still_reports_when_prosody_exists(self):
         """Absence of events is information too — it is why the coach speeds up."""
@@ -168,7 +200,9 @@ class TestDominantEvent:
         )
         assert p.event_counts["word_repetition"] == 3
         assert p.dominant_event == "block"
-        assert "do not fill the pause" in p.to_prompt_block()
+        # The directive follows the dominant event, and lives in the system
+        # message rather than the user-facing block (a12-v4).
+        assert "do not fill the pause" in (p.coaching_directive() or "").lower()
 
     def test_many_fillers_still_surface_filler_guidance(self):
         """Duration weighting must not make blocks the only answer."""

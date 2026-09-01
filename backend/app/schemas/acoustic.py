@@ -241,11 +241,26 @@ class AcousticProfile(BaseModel):
             )
             lines.append(f"pitch: {texture}")
 
-        if dom := self.dominant_event:
-            lines.append(f"guidance: {COACHING_HINT[DysfluencyKind(dom)]}")
-
+        # NO guidance line here. It used to sit in this block, and evaluation
+        # showed the model echoing it straight back to the user — replies like
+        # "give them room, don't fill the pause" addressed to the speaker, who
+        # is not the one who needs that instruction. Anything inside the user
+        # turn reads as content to relay; an instruction about how to respond
+        # belongs in the system role. See `coaching_directive`.
         lines.append("</acoustic_context>")
         return "\n".join(lines)
+
+    def coaching_directive(self) -> str | None:
+        """How the coach should adapt, phrased as an instruction to the model.
+
+        Kept out of `to_prompt_block` on purpose: the prompt builder puts this
+        in the system message, where the model treats it as a rule rather than
+        as something to say out loud.
+        """
+        if not self.analyzed:
+            return None
+        dom = self.dominant_event
+        return COACHING_HINT[DysfluencyKind(dom)] if dom else None
 
     @classmethod
     def unavailable(cls) -> AcousticProfile:
