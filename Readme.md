@@ -134,7 +134,19 @@ problem entirely.
 
 The application layer (Track A) is built and tested: both WebSocket paths, the cascade,
 RAG, prompt engineering, conversation history, and the React UI including the dysfluency
-timeline and progress dashboard.
+timeline and progress dashboard. The full Knowledge Mode path has been run end to end
+against a served model — see [`backend/scripts/`](backend/scripts/), whose output
+reproduces every measurement quoted below and in the report.
+
+Two figures worth knowing before reading further, both measured rather than estimated:
+
+- Against a **1400 ms** block spliced into real speech, the analyzer recovered
+  **1480 ms**, located within 105 ms. Whisper's transcript contained no trace of it.
+- Time to first audio on the cascade is **~1.9 s**, not the ~1 s originally planned.
+  Whisper is the dominant cost. The live path's ~200 ms is unchanged, so the gap the
+  thesis measures is wider than expected, not narrower.
+
+The demo walkthrough is in [`docs/DEMO.md`](docs/DEMO.md).
 
 Two things are stubs waiting on Track M. The **live coach** needs the Moshi service
 (M2) — the client is written and the app falls back automatically until it exists. The
