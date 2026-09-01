@@ -461,6 +461,10 @@ export function useCoachSession() {
               text: t.text,
               acoustic: t.acoustic,
               citations: t.citations ?? [],
+              // Carried through so a resumed conversation still shows its
+              // waterfalls; without this the breakdown exists only for turns
+              // that happened in the current page load.
+              timings: t.timings ?? [],
               totalMs: t.total_ms ?? undefined,
             })),
         );

@@ -43,8 +43,45 @@ class ChatRequest(BaseModel):
     llm_variant: str | None = None
 
 
+class Stage(StrEnum):
+    """The pipeline stages a turn can be timed at.
+
+    Frozen so the UI can order and colour a waterfall deterministically instead
+    of guessing from free-text labels.
+
+    These are the names the code already emits, not a tidier set invented here:
+    renaming them would orphan every timing already persisted in SQLite, and
+    those rows are the measurements the thesis cites. `tts_first` is declared
+    ahead of use — the spoken path does not record it yet.
+    """
+
+    STT = "stt"
+    ACOUSTIC = "acoustic"
+    RETRIEVAL = "retrieval"
+    LLM_TTFT = "llm_ttft"
+    LLM = "llm"
+    TTS_FIRST = "tts_first"
+
+
+#: Render order. Roughly the order a turn passes through them, so a waterfall
+#: reads left to right as time.
+STAGE_ORDER: tuple[Stage, ...] = (
+    Stage.STT,
+    Stage.ACOUSTIC,
+    Stage.RETRIEVAL,
+    Stage.LLM_TTFT,
+    Stage.LLM,
+    Stage.TTS_FIRST,
+)
+
+
 class StageTiming(BaseModel):
-    """Per-stage latency, collected for M10 and M12."""
+    """Per-stage latency, collected for M10 and M12.
+
+    `stage` stays a plain string rather than the enum: a turn stored before a
+    stage was named should still deserialise, and an unknown label is better
+    rendered as "other" than raised as a validation error on someone's history.
+    """
 
     stage: str
     ms: float
@@ -71,6 +108,10 @@ class TurnOut(BaseModel):
     created_at: datetime
     citations: list[Citation] = Field(default_factory=list)
     acoustic: AcousticProfile | None = None
+    #: Per-stage breakdown. Persisted since the first commit but never
+    #: returned, so a resumed conversation could show a total with nothing
+    #: behind it — the cascade-versus-live argument sat in SQLite, unreadable.
+    timings: list[StageTiming] = Field(default_factory=list)
     total_ms: float | None = None
 
     model_config = {"from_attributes": True}

@@ -1,23 +1,27 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 
 import { api } from "../lib/api";
-import type { ProgressOut, SystemStatus } from "../lib/types";
+import type { Message, ProgressOut, SystemStatus } from "../lib/types";
+import { SessionTimings } from "./TurnTimings";
 import { Panel, Stat } from "./ui/primitives";
 
 /**
  * Practice trends across sessions.
  *
  * Framed as change over time, never as an assessment. There is no score, no
- * grade, and deliberately no "good" direction marked on the chart — a
+ * grade, and deliberately no "good" direction marked on the chart â€” a
  * downward-trend style here would turn the dashboard into the scoreboard this
  * product exists not to be (docs/ETHICS.md).
  */
 export function ProgressPanel({
   status,
   refreshKey,
+  messages = [],
 }: {
   status: SystemStatus | null;
   refreshKey: number;
+  /** Used only for the per-stage aggregate; never for anything about the user. */
+  messages?: Message[];
 }) {
   const [progress, setProgress] = useState<ProgressOut | null>(null);
 
@@ -54,6 +58,9 @@ export function ProgressPanel({
       </Panel>
 
       <Panel title="System">
+        {/* Speed of the machine, not of the speaker. This is the one chart in
+            the app allowed to be about latency. */}
+        <SessionTimings messages={messages} />
         <ul className="sys-list">
           <SysRow
             label="Live coach"
@@ -75,15 +82,15 @@ export function ProgressPanel({
           />
           <li className="sys-row">
             <span>Analyzer</span>
-            <code>{status?.analyzer ?? "—"}</code>
+            <code>{status?.analyzer ?? "â€”"}</code>
           </li>
           <li className="sys-row">
             <span>Prompt</span>
-            <code>{status?.prompt_version ?? "—"}</code>
+            <code>{status?.prompt_version ?? "â€”"}</code>
           </li>
           <li className="sys-row">
             <span>Checkpoint</span>
-            <code>{status?.llm_variant ?? "—"}</code>
+            <code>{status?.llm_variant ?? "â€”"}</code>
           </li>
         </ul>
       </Panel>
@@ -121,7 +128,7 @@ function SysRow({
  * charting "amount of dysfluency over time" would be a severity score with a
  * line through it.
  *
- * One series, so no legend — the caption names it. Recessive gridlines, a
+ * One series, so no legend â€” the caption names it. Recessive gridlines, a
  * single emphasised endpoint, and no value printed on every point.
  */
 function PaceChart({ points }: { points: ProgressOut["points"] }) {
@@ -186,8 +193,9 @@ function PaceChart({ points }: { points: ProgressOut["points"] }) {
         <circle className="chart-dot" cx={lx} cy={ly} r="3.5" />
       </svg>
       <figcaption className="chart-caption">
-        Speaking pace · latest <b>{Math.round(last)} wpm</b>
+        Speaking pace Â· latest <b>{Math.round(last)} wpm</b>
       </figcaption>
     </figure>
   );
 }
+

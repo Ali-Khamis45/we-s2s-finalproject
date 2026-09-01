@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { Citation, Message } from "../lib/types";
+import type { Citation, Message, StageTiming } from "../lib/types";
 import { DysfluencyTimeline } from "./DysfluencyTimeline";
+import { TurnTimings } from "./TurnTimings";
 
 interface Props {
   messages: Message[];
@@ -23,12 +24,38 @@ export function Conversation({ messages, speaking }: Props) {
     );
   }
 
+  // The other path's most recent timed turn, so a coach turn can be shown
+  // against it. One image of ~200 ms beside ~2 s is the project's argument.
+  const counterpart = (mode: Message["mode"]) => {
+    const otherLive = mode !== "live";
+    const match = [...messages]
+      .reverse()
+      .find(
+        (m) =>
+          m.role === "coach" &&
+          (m.timings?.length ?? 0) > 0 &&
+          (otherLive ? m.mode === "live" : m.mode !== "live"),
+      );
+    return match
+      ? {
+          label: otherLive ? "Live coach" : "Grounded",
+          timings: match.timings ?? [],
+          totalMs: match.totalMs,
+        }
+      : null;
+  };
+
   return (
     // Coach turns are announced politely; a screen reader user should hear the
     // reply without being interrupted mid-sentence.
     <div className="conversation" aria-live="polite" aria-relevant="additions text">
       {messages.map((m, i) => (
-        <MessageBubble key={m.id} message={m} index={i} />
+        <MessageBubble
+          key={m.id}
+          message={m}
+          index={i}
+          compareWith={m.role === "coach" ? counterpart(m.mode) : null}
+        />
       ))}
       {speaking && (
         <div className="speaking-hint">
@@ -43,7 +70,15 @@ export function Conversation({ messages, speaking }: Props) {
   );
 }
 
-function MessageBubble({ message, index }: { message: Message; index: number }) {
+function MessageBubble({
+  message,
+  index,
+  compareWith,
+}: {
+  message: Message;
+  index: number;
+  compareWith?: { label: string; timings: StageTiming[]; totalMs?: number } | null;
+}) {
   const isUser = message.role === "user";
 
   return (
@@ -60,7 +95,15 @@ function MessageBubble({ message, index }: { message: Message; index: number }) 
             ungrounded
           </span>
         )}
-        {message.totalMs ? (
+        {message.timings && message.timings.length > 0 ? (
+          <span className="turn-ms">
+            <TurnTimings
+              timings={message.timings}
+              totalMs={message.totalMs}
+              compareWith={compareWith}
+            />
+          </span>
+        ) : message.totalMs ? (
           <span className="turn-ms" title="Time from your speech to this reply">
             {Math.round(message.totalMs)} ms
           </span>

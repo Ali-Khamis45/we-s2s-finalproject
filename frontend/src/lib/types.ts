@@ -110,6 +110,7 @@ export interface TurnOut {
   created_at: string;
   citations: Citation[];
   acoustic: AcousticProfile | null;
+  timings: StageTiming[];
   total_ms: number | null;
 }
 

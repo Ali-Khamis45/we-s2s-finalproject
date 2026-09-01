@@ -659,6 +659,165 @@
   color: var(--ink-2);
 }
 
+/* ======================================================== turn timings */
+
+.tt { display: inline-flex; }
+
+.tt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border-radius: var(--r-full);
+  border: 1px solid transparent;
+  font-size: var(--s-2xs);
+  color: var(--muted);
+  transition: color var(--t-fast) var(--e-out), border-color var(--t-fast) var(--e-out);
+}
+
+.tt-chip:hover { color: var(--ink); border-color: var(--rule); }
+
+.tt-body {
+  position: absolute;
+  left: var(--sp-4);
+  right: var(--sp-4);
+  margin-top: var(--sp-2);
+  padding: var(--sp-3);
+  border-radius: var(--r-md);
+  background: var(--ground-3);
+  border: 1px solid var(--rule);
+  z-index: 3;
+  animation: rise var(--t-base) var(--e-out) backwards;
+}
+
+.tt-compare {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding-bottom: var(--sp-3);
+  margin-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--rule);
+}
+
+.tt-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.tt-row-label {
+  flex: none;
+  width: 84px;
+  font-size: var(--s-2xs);
+  color: var(--muted);
+}
+
+.tt-bar {
+  flex: 1;
+  display: flex;
+  height: 22px;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--ground-2);
+  min-width: 0;
+}
+
+/* A sequential ramp, sage through to amber — stages are a sequence, and a
+ * categorical rainbow would imply they are unrelated. Amber is reserved for
+ * the dominant stage, which is almost always transcription. That is the
+ * finding, not a rendering accident. */
+.tt-seg {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+  background: var(--sage-deep);
+  /* A 2px surface gap so adjacent segments read as separate. */
+  box-shadow: inset -2px 0 0 var(--ground-3);
+  flex: none;
+}
+
+.tt-seg:nth-child(2) { background: color-mix(in srgb, var(--sage-deep), var(--sage) 55%); }
+.tt-seg:nth-child(3) { background: var(--sage); }
+.tt-seg:nth-child(4) { background: color-mix(in srgb, var(--sage), var(--amber-dim) 60%); }
+.tt-seg:nth-child(5) { background: var(--amber-dim); }
+
+.tt-seg.is-dominant { background: var(--amber); }
+
+.tt-seg-label {
+  padding: 0 6px;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--ground-0);
+  opacity: 0;
+  transition: opacity var(--t-fast) var(--e-out);
+}
+
+/* Only wide segments can carry a legible label; the rest rely on the table
+ * and the aria-label, never on colour alone. */
+.tt-seg:hover .tt-seg-label,
+.tt-seg.is-dominant .tt-seg-label { opacity: 1; }
+
+.tt-total {
+  flex: none;
+  font-size: var(--s-2xs);
+  color: var(--ink-2);
+}
+
+.tt-note {
+  margin-top: var(--sp-2);
+  font-size: var(--s-2xs);
+  color: var(--muted);
+}
+
+.tt-note b { color: var(--ink-2); }
+
+.tt-toggle {
+  margin-top: var(--sp-2);
+  font-size: var(--s-2xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sage);
+}
+
+.tt-toggle:hover { color: var(--ink); }
+
+.tt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--s-2xs);
+  margin-bottom: var(--sp-3);
+}
+
+.tt-caption {
+  text-align: left;
+  padding-bottom: var(--sp-2);
+}
+
+.tt-table th,
+.tt-table td {
+  text-align: left;
+  padding: 5px 8px 5px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.tt-table thead th {
+  color: var(--muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 9.5px;
+}
+
+.tt-table tbody th { font-weight: 400; color: var(--ink-2); }
+.tt-table td { color: var(--ink-2); }
+.tt-table tfoot th,
+.tt-table tfoot td { color: var(--ink); font-weight: 600; border-bottom: 0; }
+.tt-within { color: var(--faint); font-style: italic; }
+
+/* The bubble needs to be a positioning context for the expanded panel. */
+.turn { position: relative; }
+
 /* ============================================================== citations */
 
 .citations { margin-top: var(--sp-3); }

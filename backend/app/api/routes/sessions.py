@@ -32,6 +32,7 @@ from app.schemas.chat import (
     SessionDetail,
     SessionMetrics,
     SessionOut,
+    StageTiming,
     TurnOut,
 )
 
@@ -51,6 +52,7 @@ def _to_turn(row: TurnRow) -> TurnOut:
         created_at=row.created_at,
         citations=[Citation(**c) for c in (row.citations or [])],
         acoustic=AcousticProfile(**row.acoustic) if row.acoustic else None,
+        timings=[StageTiming(**t) for t in (row.timings or [])],
         total_ms=row.total_ms,
     )
 

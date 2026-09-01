@@ -67,6 +67,72 @@ class TestSessions:
         assert authed_client.get(f"/api/sessions/{sid}").status_code == 404
 
 
+class TestTurnTimings:
+    """Per-stage timings must survive the round trip to the client.
+
+    They were persisted from the first commit and dropped by the response
+    schema, so a resumed conversation showed a total with nothing behind it —
+    the cascade-versus-live measurement sat in SQLite, unreadable. This is the
+    regression guard.
+    """
+
+    def test_stored_timings_are_returned_when_a_session_is_replayed(
+        self, authed_client: TestClient
+    ):
+        import asyncio
+
+        from app.db.models import Turn
+        from app.db.session import SessionLocal
+
+        sid = authed_client.post("/api/sessions").json()["id"]
+
+        async def insert() -> None:
+            async with SessionLocal() as db:
+                db.add(
+                    Turn(
+                        session_id=sid,
+                        role="coach",
+                        mode="knowledge",
+                        text="Try one breath before you start.",
+                        timings=[
+                            {"stage": "stt", "ms": 776.0},
+                            {"stage": "acoustic", "ms": 3.0},
+                            {"stage": "llm", "ms": 8986.0},
+                        ],
+                        total_ms=9810.0,
+                    )
+                )
+                await db.commit()
+
+        asyncio.run(insert())
+
+        turns = authed_client.get(f"/api/sessions/{sid}").json()["turns"]
+        assert len(turns) == 1
+
+        timings = turns[0]["timings"]
+        assert [t["stage"] for t in timings] == ["stt", "acoustic", "llm"]
+        assert timings[0]["ms"] == 776.0
+        assert turns[0]["total_ms"] == 9810.0
+
+    def test_a_turn_without_timings_still_serialises(self, authed_client: TestClient):
+        """Live-path turns record none; the UI must not receive null."""
+        sid = authed_client.post("/api/sessions").json()["id"]
+        import asyncio
+
+        from app.db.models import Turn
+        from app.db.session import SessionLocal
+
+        async def insert() -> None:
+            async with SessionLocal() as db:
+                db.add(Turn(session_id=sid, role="coach", mode="live", text="Go on."))
+                await db.commit()
+
+        asyncio.run(insert())
+
+        turns = authed_client.get(f"/api/sessions/{sid}").json()["turns"]
+        assert turns[0]["timings"] == []
+
+
 class TestDegradation:
     """The product must work with the flagship down. This is the largest risk."""
 

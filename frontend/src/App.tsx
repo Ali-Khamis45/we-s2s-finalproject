@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+﻿import { useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 
 import { Atmosphere } from "./components/Atmosphere";
@@ -67,7 +67,7 @@ export default function App() {
               Speech <span className="brand-accent">Confidence</span> Coach
             </h1>
             <p className="brand-sub rise rise-2">
-              Practice speaking with a coach that listens to how you say it — not
+              Practice speaking with a coach that listens to how you say it â€” not
               only what you say.
             </p>
           </div>
@@ -115,7 +115,11 @@ export default function App() {
           </div>
 
           <div className="side">
-            <ProgressPanel status={session.status} refreshKey={refreshKey} />
+            <ProgressPanel
+              status={session.status}
+              refreshKey={refreshKey}
+              messages={session.messages}
+            />
             <SessionHistory
               activeId={session.sessionId}
               refreshKey={refreshKey}
@@ -126,10 +130,11 @@ export default function App() {
         </main>
 
         <footer className="foot">
-          <strong>An accessibility practice tool.</strong> Not a medical device —
+          <strong>An accessibility practice tool.</strong> Not a medical device â€”
           it doesn&rsquo;t diagnose or assess anyone.
         </footer>
       </div>
     </>
   );
 }
+
