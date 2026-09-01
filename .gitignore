@@ -57,8 +57,13 @@ design/*.zip
 ml/evaluation/results*/
 
 # ---- Runtime artifacts ----
+# Any database, under any suffix. The bare *.db rule did not cover a .bak
+# copy, and one got committed — a dev database holding practice transcripts.
+# Nothing in this repository should ever hold somebody's speech data.
 *.db
+*.db.*
 *.sqlite3
+*.sqlite3.*
 *.wav
 *.mp3
 *.opus
