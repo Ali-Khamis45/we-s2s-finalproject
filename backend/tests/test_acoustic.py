@@ -141,6 +141,53 @@ class TestPromptBlock:
         assert "longest pause" not in p.to_prompt_block()
 
 
+class TestDominantEvent:
+    """Drives which coaching instruction reaches the model, so it is pinned."""
+
+    def test_one_long_block_beats_several_short_repetitions(self):
+        """Regression: counting let 3 short repetitions outvote a 1.5 s block.
+
+        The block is what the coach most needs to respond to — it is the case
+        where "give them room, do not fill the pause" applies.
+        """
+        p = profile(
+            events=[
+                DysfluencyEvent(
+                    kind=DysfluencyKind.WORD_REPETITION, start_ms=0, end_ms=300
+                ),
+                DysfluencyEvent(
+                    kind=DysfluencyKind.WORD_REPETITION, start_ms=310, end_ms=610
+                ),
+                DysfluencyEvent(
+                    kind=DysfluencyKind.WORD_REPETITION, start_ms=620, end_ms=920
+                ),
+                DysfluencyEvent(
+                    kind=DysfluencyKind.BLOCK, start_ms=1_000, end_ms=2_500
+                ),
+            ]
+        )
+        assert p.event_counts["word_repetition"] == 3
+        assert p.dominant_event == "block"
+        assert "do not fill the pause" in p.to_prompt_block()
+
+    def test_many_fillers_still_surface_filler_guidance(self):
+        """Duration weighting must not make blocks the only answer."""
+        p = profile(
+            events=[
+                DysfluencyEvent(
+                    kind=DysfluencyKind.INTERJECTION,
+                    start_ms=i * 400,
+                    end_ms=i * 400 + 300,
+                )
+                for i in range(6)
+            ]
+        )
+        assert p.dominant_event == "interjection"
+
+    def test_no_events_has_no_dominant(self):
+        assert profile(events=[]).dominant_event is None
+
+
 class TestContract:
     def test_schema_version_is_pinned(self):
         assert SCHEMA_VERSION == "1.0"

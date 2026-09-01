@@ -44,6 +44,22 @@ class RetrievalResult:
         return not self.citations
 
 
+def _first_result(raw: dict[str, Any], key: str) -> list[Any]:
+    """Unwrap one field from a Chroma query result.
+
+    Chroma nests results one level per query, and since 1.x it returns
+    embeddings as numpy arrays while documents and metadata stay Python lists.
+    That mix rules out the obvious `raw.get(key, [[]])[0] or []` — `or` on a
+    numpy array raises "truth value of an array is ambiguous", and only with a
+    populated index, so it survives every test that runs against an empty one.
+    """
+    value = raw.get(key)
+    if value is None or len(value) == 0:
+        return []
+    inner = value[0]
+    return [] if inner is None else list(inner)
+
+
 def _cosine(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """Cosine similarity of one vector against a matrix of vectors."""
     if b.size == 0:
@@ -208,10 +224,10 @@ class RetrievalService:
             include=["documents", "metadatas", "distances", "embeddings"],
         )
 
-        documents = raw.get("documents", [[]])[0] or []
-        metadatas = raw.get("metadatas", [[]])[0] or []
-        distances = raw.get("distances", [[]])[0] or []
-        embeddings = raw.get("embeddings", [[]])[0] or []
+        documents = _first_result(raw, "documents")
+        metadatas = _first_result(raw, "metadatas")
+        distances = _first_result(raw, "distances")
+        embeddings = _first_result(raw, "embeddings")
 
         if not documents:
             return RetrievalResult(citations=[], grounded=False, candidates=0)

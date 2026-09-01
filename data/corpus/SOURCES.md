@@ -33,3 +33,22 @@ Recorded here so the report can state them and so re-ingestion is reproducible.
 
 Re-run ingestion after any change to this list, and note the date the store was last
 rebuilt: *(not yet built)*
+
+## Recalibrate the groundedness gate after ingesting
+
+`SCC_RETRIEVAL_MIN_SCORE` (currently `0.55`) decides when the coach admits it has no
+material instead of answering from weak matches. It is **specific to this corpus and
+this embedding model**, and the current value was measured against a small test fixture,
+not the real thing.
+
+Once real documents are indexed, re-measure with `backend/scripts/verify_retrieval.py`
+and by querying directly:
+
+```
+GET /api/corpus/search?q=<a question the corpus DOES cover>
+GET /api/corpus/search?q=<a question it clearly does not>
+```
+
+Set the threshold between the two score bands. Note that bge embeddings have a high
+similarity floor — unrelated text scores around 0.35–0.48, not near zero — so a low
+threshold silently disables the gate entirely.

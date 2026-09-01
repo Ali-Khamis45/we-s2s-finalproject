@@ -160,10 +160,26 @@ class AcousticProfile(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def dominant_event(self) -> str | None:
-        counts = self.event_counts
-        if not counts:
+        """The event kind that occupied the most time.
+
+        Weighted by duration, not by count. Counting would let three 400 ms
+        repetitions outvote a single 1.5 s block, and the coach would be told
+        to watch for repeated words when what actually happened is that the
+        speaker got stuck — the one situation where "give them room, do not
+        fill the pause" matters most. Time occupied is the better proxy for
+        what dominated the utterance, and it still surfaces filler guidance for
+        someone whose speech is mostly interjections.
+        """
+        if not self.events:
             return None
-        return max(counts.items(), key=lambda kv: kv[1])[0]
+
+        by_kind: dict[str, tuple[int, int]] = {}
+        for e in self.events:
+            total_ms, count = by_kind.get(e.kind.value, (0, 0))
+            by_kind[e.kind.value] = (total_ms + e.duration_ms, count + 1)
+
+        # Count breaks ties, so zero-length events still resolve deterministically.
+        return max(by_kind.items(), key=lambda kv: (kv[1][0], kv[1][1]))[0]
 
     def suggested_speech_rate(self, *, floor: float, ceiling: float) -> float:
         """Map fluency load onto a TTS rate multiplier.

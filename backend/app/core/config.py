@@ -72,9 +72,22 @@ class Settings(BaseSettings):
     retrieval_k: int = 4
     retrieval_fetch_k: int = 20
     retrieval_lambda: float = 0.5
-    # Below this best-match score a question is treated as outside the corpus.
-    # The coach says so rather than inventing an answer (verification step 4).
-    retrieval_min_score: float = 0.28
+    # Below this best-match score a question is treated as outside the corpus,
+    # and the coach says it has no material rather than inventing an answer.
+    #
+    # CALIBRATED, NOT GUESSED. bge embeddings have a high similarity floor —
+    # unrelated text does not score near zero. Measured against a coaching
+    # corpus with bge-small-en-v1.5:
+    #
+    #   "how do I stop speaking too fast"        0.71   in corpus
+    #   "how do I change a diesel oil filter"    0.48   unrelated, but phrased
+    #                                                   as a how-to question
+    #   "what is the capital of Mongolia"        0.35   unrelated
+    #
+    # A gate below ~0.5 therefore admits everything and is no gate at all.
+    # Re-measure once the real corpus exists (A10) and after any change to
+    # `embedding_model` — this number is specific to both.
+    retrieval_min_score: float = 0.55
 
     # ---- LLM (cascade, CPU via llama.cpp) ----
     llm_base_url: str = "http://127.0.0.1:8080/v1"
