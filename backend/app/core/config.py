@@ -45,7 +45,24 @@ class Settings(BaseSettings):
     moshi_sample_rate: int = 24_000
 
     # ---- STT (A7) ----
-    whisper_model: str = "small"
+    # CHOSEN BY MEASUREMENT, not by defaulting to the middle option. What
+    # matters here is not transcript quality but WORD-TIMESTAMP accuracy: the
+    # acoustic branch derives block duration and pause length from it.
+    # Benchmarked on a 3.6 s utterance with a 1400 ms block spliced in
+    # (backend/scripts/bench_whisper.py, CPU int8):
+    #
+    #   tiny    285 ms   MISSED the block entirely
+    #   base    598 ms   block measured 1440 ms  (40 ms error)
+    #   small  2025 ms   block measured 1460 ms  (60 ms error)
+    #
+    # `base` is 3.4x faster than `small` and marginally MORE accurate on the
+    # measurement that matters, so it is the default.
+    #
+    # Do not drop to `tiny`. It transcribed "I-I-I want ... water" as
+    # "I want water please" — normalising away both the repetitions and the
+    # 1.4 s pause. A model that fluent-izes disfluent speech destroys the exact
+    # signal this project exists to preserve.
+    whisper_model: str = "base"
     whisper_device: str = "cpu"
     whisper_compute_type: str = "int8"
     whisper_language: str | None = "en"

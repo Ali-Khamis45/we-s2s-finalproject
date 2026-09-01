@@ -24,7 +24,27 @@ Five of the eleven required features — STT, RAG, prompt engineering, a fine-tu
 
 - **`moshi.cpp` does not exist.** The real quantized paths are Kyutai's Rust/Candle implementation with q4/q8 weights (`kyutai/moshiko-candle-q8`) or `moshi_mlx` on Apple silicon. Plan against Candle.
 - **Option A is not viable at all.** OuteTTS is a *text-to-speech* model — a Llama backbone emitting WavTokenizer/DAC audio tokens from **text input**. It cannot ingest speech or perceive dysfluency, and there is no "OuteTTS S2S-1B." It cannot do the job the original proposal wanted from it.
-- **The `<300 ms` figure applies to Moshi, not to the cascade.** Moshi genuinely reaches ~200 ms. The cascade realistically lands at **750 ms – 1.1 s to first audio**. Do not promise 300 ms for the text path in the report — that gap *is* the quantitative result.
+- **The `<300 ms` figure applies to Moshi, not to the cascade.** Moshi genuinely reaches ~200 ms. The cascade is far slower — see the measured figures below. Do not promise 300 ms for the text path in the report; that gap *is* the quantitative result.
+
+### Measured cascade latency
+
+The 750 ms – 1.1 s figure originally written here was an estimate, and measurement
+disproved it. Warm-path, CPU, 3.6 s utterance (`backend/scripts/bench_latency.py`):
+
+| Stage | p50 |
+|---|---|
+| Whisper `base` STT | ~600 ms |
+| Acoustic analyzer | 3 ms |
+| Prompt assembly | <1 ms |
+| LLM time-to-first-token (0.5B) | 30 ms cached / ~3.7 s cold |
+| **Time to first audio** | **~1.9 s measured on 0.5B** |
+
+Two things inflate the real figure further: the project ships a **3B** model, not the
+0.5B used for this measurement, and CPU decode scales roughly with parameter count.
+Expect **seconds**, not one second.
+
+This does not weaken the thesis — it widens the gap against Moshi's ~200 ms, which is
+precisely what M12 exists to measure. Quote measurements, never the estimate.
 
 **Moshi's real limitations, stated plainly, because they will come up in the defense:**
 
@@ -91,7 +111,7 @@ Moshi q4 at ~5.5–6 GB will not share the card with a full second stack, so the
 |---|---|---|
 | **Moshi 7B q4 + Mimi codec** | **GPU (resident)** | **~5.5–6.0 GB** |
 | Moshi LoRA coaching adapter | GPU (merged) | ~0 GB |
-| Whisper `small` int8 (CTranslate2) | CPU | 0 |
+| Whisper `base` int8 (CTranslate2) | CPU | 0 |
 | wav2vec2-base dysfluency head | CPU | 0 |
 | Qwen2.5-3B GGUF Q4_K_M (llama.cpp) | CPU, ~8–15 tok/s | 0 |
 | bge-small embeddings + ChromaDB | CPU | 0 |

@@ -68,8 +68,10 @@ class TestSessions:
 class TestDegradation:
     """The product must work with the flagship down. This is the largest risk."""
 
-    def test_chat_reports_model_unavailable_not_a_crash(self, client: TestClient):
-        """No llama-server running: a clear 503, not a stack trace."""
+    def test_chat_reports_model_unavailable_not_a_crash(
+        self, client: TestClient, llm_offline: None
+    ):
+        """Model unreachable: a clear 503 naming the fix, not a stack trace."""
         r = client.post("/api/chat", json={"message": "Hello"})
         assert r.status_code == 503
         error = r.json()["error"]

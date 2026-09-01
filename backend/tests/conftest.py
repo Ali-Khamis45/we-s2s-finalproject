@@ -33,3 +33,24 @@ def client() -> Iterator[TestClient]:
     """A client with the app's lifespan run, so the schema exists."""
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture
+def llm_offline(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Point the LLM client at an address that will refuse the connection.
+
+    Degradation tests must not assume nothing happens to be listening on the
+    real port — anyone running llama-server locally (as the verification
+    scripts do) would otherwise see these fail for the wrong reason. Port 9 is
+    the discard service and is reliably closed.
+
+    The httpx client binds its base URL at construction, so it is reset either
+    side to force a rebuild.
+    """
+    from app.core.config import settings
+    from app.services.llm import llm_service
+
+    monkeypatch.setattr(settings, "llm_base_url", "http://127.0.0.1:9/v1")
+    llm_service._client = None
+    yield
+    llm_service._client = None

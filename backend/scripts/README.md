@@ -81,3 +81,69 @@ The original default of 0.28 admitted all three, which meant the coach would
 have answered an out-of-corpus question from weak matches instead of saying it
 had no material. The gate now sits at 0.55. Being unhelpful about technique is
 much better than being confidently wrong about it.
+
+---
+
+## `verify_cascade.py`
+
+The whole Knowledge Mode path end to end, driven through the real FastAPI app:
+retrieval, prompt assembly, generation, streaming, and persistence.
+
+Needs a served model first:
+
+```bash
+python -m llama_cpp.server --model <path>.gguf --model_alias qwen-test \
+  --port 8080 --n_ctx 4096 --chat_format chatml
+python scripts/verify_cascade.py scripts/words/dysfluent_utterance.wav
+```
+
+Covers the five things no other check reaches: a grounded cited answer, the
+gate refusing an out-of-corpus question, a spoken turn carrying its acoustic
+context into the prompt, incremental SSE streaming, and unified history across
+modes.
+
+---
+
+## `bench_latency.py`
+
+Warm-path per-stage latency, p50 and p95. Feeds M10 and M12.
+
+```bash
+python scripts/bench_latency.py scripts/words/dysfluent_utterance.wav 5
+```
+
+**This replaced an estimate with a measurement, and the estimate was wrong.**
+The plan originally claimed 750 ms – 1.1 s to first audio. Measured: **~1.9 s**
+on a 0.5B model, and the project ships 3B. Expect seconds.
+
+That is not bad news for the thesis — it widens the gap against Moshi's
+~200 ms, which is exactly the comparison M12 exists to make.
+
+---
+
+## `bench_whisper.py`
+
+Which Whisper model the cascade should use — decided on word-timestamp
+accuracy, not transcript quality, because the acoustic branch measures block
+duration from the timings.
+
+```bash
+python scripts/bench_whisper.py scripts/words/dysfluent_utterance.wav tiny,base,small
+```
+
+Measured against a 1400 ms block spliced into a 3.6 s utterance:
+
+| Model | STT p50 | RTF | Block measured | Error |
+|---|---|---|---|---|
+| tiny | 285 ms | 0.08 | **missed entirely** | — |
+| **base** | **598 ms** | **0.17** | **1440 ms** | **40 ms** |
+| small | 2025 ms | 0.56 | 1460 ms | 60 ms |
+
+`base` is the default: 3.4× faster than `small` and marginally *more* accurate
+on the measurement that matters.
+
+**`tiny` is disqualified, and worth a paragraph in the report.** It transcribed
+`"I-I-I want ... water"` as `"I want water please"` — normalising away both the
+repetitions and the 1.4 s pause. A smaller ASR model does not merely lose
+accuracy on disfluent speech; it actively fluent-izes it. That is the project's
+central claim, demonstrated as a measurement rather than asserted.
