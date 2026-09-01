@@ -82,14 +82,20 @@ class Orchestrator:
     # ---- sessions & history --------------------------------------------
 
     async def get_or_create_session(
-        self, db: AsyncSession, session_id: str | None
+        self, db: AsyncSession, session_id: str | None, user_id: str
     ) -> SessionRow:
+        """Resolve a session for this owner, or start one.
+
+        `user_id` always comes from a verified token. A session id that belongs
+        to somebody else is reported as absent, not forbidden — a 403 would
+        confirm the id is real.
+        """
         if session_id:
             row = await db.get(SessionRow, session_id)
-            if row is None:
+            if row is None or row.user_id != user_id:
                 raise NotFoundError("That practice session doesn't exist.")
             return row
-        row = SessionRow()
+        row = SessionRow(user_id=user_id)
         db.add(row)
         await db.flush()
         return row

@@ -1,8 +1,12 @@
 """Conversation history (A13) and the progress dashboard's data (A17).
 
-Everything here is framed as practice trends. There is no score, no severity,
-and no assessment — a fluency-load average is reported because it shows change
-over time, not because it grades anyone (docs/ETHICS.md).
+Every query here is owner-scoped. There is no route that can return another
+account's turns, and no aggregate that mixes two people's speech — `/progress`
+computing across all rows would silently average a stranger's pacing into
+somebody's chart.
+
+Everything is framed as practice trends. There is no score, no severity, and no
+assessment (docs/ETHICS.md).
 """
 
 from __future__ import annotations
@@ -10,12 +14,14 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import NotFoundError
+from app.api.deps import current_user, owned_session
 from app.db.models import Session as SessionRow
 from app.db.models import Turn as TurnRow
+from app.db.models import User
 from app.db.session import get_db
 from app.schemas.acoustic import AcousticProfile
 from app.schemas.chat import (
@@ -32,6 +38,10 @@ from app.schemas.chat import (
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
 
+class RenameRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+
+
 def _to_turn(row: TurnRow) -> TurnOut:
     return TurnOut(
         id=row.id,
@@ -46,8 +56,11 @@ def _to_turn(row: TurnRow) -> TurnOut:
 
 
 @router.post("", response_model=SessionOut, status_code=201)
-async def create_session(db: AsyncSession = Depends(get_db)) -> SessionOut:
-    row = SessionRow()
+async def create_session(
+    user: User = Depends(current_user), db: AsyncSession = Depends(get_db)
+) -> SessionOut:
+    # The owner comes from the verified token, never from the request body.
+    row = SessionRow(user_id=user.id)
     db.add(row)
     await db.commit()
     return SessionOut(id=row.id, started_at=row.started_at, turn_count=0)
@@ -55,7 +68,9 @@ async def create_session(db: AsyncSession = Depends(get_db)) -> SessionOut:
 
 @router.get("", response_model=list[SessionOut])
 async def list_sessions(
-    limit: int = Query(default=30, ge=1, le=200),
+    limit: int = Query(default=50, ge=1, le=200),
+    q: str | None = Query(default=None, max_length=120),
+    user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[SessionOut]:
     counts = (
@@ -66,9 +81,13 @@ async def list_sessions(
     stmt = (
         select(SessionRow, func.coalesce(counts.c.n, 0))
         .outerjoin(counts, counts.c.session_id == SessionRow.id)
+        .where(SessionRow.user_id == user.id)
         .order_by(SessionRow.started_at.desc())
         .limit(limit)
     )
+    if q:
+        stmt = stmt.where(SessionRow.title.ilike(f"%{q}%"))
+
     return [
         SessionOut(
             id=row.id,
@@ -84,14 +103,20 @@ async def list_sessions(
 @router.get("/progress", response_model=ProgressOut)
 async def progress(
     limit: int = Query(default=20, ge=1, le=100),
+    user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ProgressOut:
-    """Trend across recent sessions.
+    """Trend across this account's recent sessions.
 
     Registered before `/{session_id}` so the literal path is not captured by
     the parameterised route.
     """
-    stmt = select(SessionRow).order_by(SessionRow.started_at.desc()).limit(limit)
+    stmt = (
+        select(SessionRow)
+        .where(SessionRow.user_id == user.id)
+        .order_by(SessionRow.started_at.desc())
+        .limit(limit)
+    )
     sessions = list((await db.execute(stmt)).scalars())
 
     points: list[ProgressPoint] = []
@@ -112,19 +137,11 @@ async def progress(
             )
 
     points.reverse()  # oldest first, so the chart reads left to right
-    return ProgressOut(
-        points=points, sessions=len(sessions), total_practice_ms=total_ms
-    )
+    return ProgressOut(points=points, sessions=len(sessions), total_practice_ms=total_ms)
 
 
 @router.get("/{session_id}", response_model=SessionDetail)
-async def get_session(
-    session_id: str, db: AsyncSession = Depends(get_db)
-) -> SessionDetail:
-    row = await db.get(SessionRow, session_id)
-    if row is None:
-        raise NotFoundError("That practice session doesn't exist.")
-
+async def get_session(row: SessionRow = Depends(owned_session)) -> SessionDetail:
     turns = [_to_turn(t) for t in row.turns]
     return SessionDetail(
         id=row.id,
@@ -136,23 +153,34 @@ async def get_session(
     )
 
 
+@router.patch("/{session_id}", response_model=SessionOut)
+async def rename_session(
+    payload: RenameRequest,
+    row: SessionRow = Depends(owned_session),
+    db: AsyncSession = Depends(get_db),
+) -> SessionOut:
+    row.title = payload.title.strip()
+    await db.commit()
+    return SessionOut(
+        id=row.id,
+        started_at=row.started_at,
+        ended_at=row.ended_at,
+        title=row.title,
+        turn_count=len(row.turns),
+    )
+
+
 @router.get("/{session_id}/metrics", response_model=SessionMetrics)
 async def session_metrics(
-    session_id: str, db: AsyncSession = Depends(get_db)
+    row: SessionRow = Depends(owned_session), db: AsyncSession = Depends(get_db)
 ) -> SessionMetrics:
-    row = await db.get(SessionRow, session_id)
-    if row is None:
-        raise NotFoundError("That practice session doesn't exist.")
     return await _metrics_for(db, row)
 
 
 @router.post("/{session_id}/end", response_model=SessionOut)
 async def end_session(
-    session_id: str, db: AsyncSession = Depends(get_db)
+    row: SessionRow = Depends(owned_session), db: AsyncSession = Depends(get_db)
 ) -> SessionOut:
-    row = await db.get(SessionRow, session_id)
-    if row is None:
-        raise NotFoundError("That practice session doesn't exist.")
     if row.ended_at is None:
         row.ended_at = datetime.now(timezone.utc)
         await db.commit()
@@ -166,11 +194,11 @@ async def end_session(
 
 
 @router.delete("/{session_id}", status_code=204)
-async def delete_session(session_id: str, db: AsyncSession = Depends(get_db)) -> None:
-    row = await db.get(SessionRow, session_id)
-    if row is None:
-        raise NotFoundError("That practice session doesn't exist.")
-    await db.execute(delete(SessionRow).where(SessionRow.id == session_id))
+async def delete_session(
+    row: SessionRow = Depends(owned_session), db: AsyncSession = Depends(get_db)
+) -> None:
+    await db.execute(delete(TurnRow).where(TurnRow.session_id == row.id))
+    await db.execute(delete(SessionRow).where(SessionRow.id == row.id))
     await db.commit()
 
 

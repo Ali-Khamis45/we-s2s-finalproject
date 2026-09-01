@@ -79,6 +79,20 @@ export interface SystemStatus {
   llm_variant: string;
 }
 
+export interface UserOut {
+  id: string;
+  email: string;
+  display_name: string | null;
+  created_at: string;
+  memory_enabled: boolean;
+}
+
+export interface AuthResponse {
+  access_token: string;
+  expires_in: number;
+  user: UserOut;
+}
+
 export interface SessionSummary {
   id: string;
   started_at: string;

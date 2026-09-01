@@ -141,6 +141,33 @@ class Settings(BaseSettings):
     # is what makes the base-vs-fine-tuned comparison (M9) runnable in-app.
     llm_variant: str = "base"
 
+    # ---- auth ----
+    #: HS256 signing secret. There is deliberately no usable default: a
+    #: committed secret is a vulnerability, not a convenience, so the app
+    #: refuses to boot without one unless debug is on (see `validate_runtime`).
+    jwt_secret: str = ""
+    jwt_algorithm: str = "HS256"
+    #: Short on purpose. A JWT cannot be un-issued, so the compensation for
+    #: choosing bearer tokens over server sessions is that a stolen access
+    #: token is worthless within minutes; all revocation lives on the refresh
+    #: side, which IS server-controlled.
+    access_token_minutes: int = 10
+    refresh_token_days: int = 14
+    ws_ticket_seconds: int = 30
+
+    #: Rate limits, as (attempts, window_seconds).
+    login_rate: tuple[int, int] = (5, 15 * 60)
+    register_rate: tuple[int, int] = (3, 60 * 60)
+    refresh_rate: tuple[int, int] = (30, 60 * 60)
+    #: Consecutive failures before lockout, and the cap on its backoff.
+    lockout_after: int = 5
+    lockout_max_seconds: int = 15 * 60
+
+    #: Cookie flags. `secure` follows debug so localhost http works, but the
+    #: flag is never removed — only conditioned.
+    refresh_cookie_name: str = "scc_refresh"
+    refresh_cookie_path: str = "/api/auth"
+
     # ---- conversation (A13) ----
     history_turns: int = 8
     max_transcript_chars: int = 4_000
@@ -165,6 +192,29 @@ class Settings(BaseSettings):
     def ensure_dirs(self) -> None:
         for d in (self.data_dir, self.chroma_dir, self.corpus_dir):
             d.mkdir(parents=True, exist_ok=True)
+
+    def validate_runtime(self) -> None:
+        """Fail fast on a configuration that would be insecure in production.
+
+        Called at startup. In debug the secret is generated per-process, which
+        keeps localhost frictionless while guaranteeing that a forgotten secret
+        can never reach a non-debug deployment — and that tokens do not survive
+        a restart in development either.
+        """
+        if len(self.jwt_secret) >= 32:
+            return
+
+        if not self.debug:
+            raise RuntimeError(
+                "SCC_JWT_SECRET is unset or shorter than 32 bytes. Refusing to "
+                "start: a weak or shared signing secret lets anyone mint access "
+                "tokens for any account. Generate one with:\n"
+                "    python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+            )
+
+        import secrets
+
+        object.__setattr__(self, "jwt_secret", secrets.token_urlsafe(48))
 
 
 @lru_cache

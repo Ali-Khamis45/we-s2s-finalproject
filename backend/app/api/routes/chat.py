@@ -1,4 +1,4 @@
-"""Conversational HTTP endpoints (A6).
+﻿"""Conversational HTTP endpoints (A6).
 
 The text path exists for three reasons: the brief requires text interaction, it
 is the debuggable surface where the RAG and prompt layers can be exercised
@@ -11,8 +11,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import current_user
 from app.core.errors import ValidationError
 from app.core.logging import set_session_id
+from app.db.models import User
 from app.db.session import get_db
 from app.schemas.chat import ChatRequest, ChatResponse, Mode
 from app.services.audio import read_wav
@@ -23,10 +25,12 @@ router = APIRouter(prefix="/api", tags=["chat"])
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
-    payload: ChatRequest, db: AsyncSession = Depends(get_db)
+    payload: ChatRequest,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> ChatResponse:
     """One typed turn through the cascade."""
-    session = await orchestrator.get_or_create_session(db, payload.session_id)
+    session = await orchestrator.get_or_create_session(db, payload.session_id, user.id)
     set_session_id(session.id)
 
     result = await orchestrator.answer_text(
@@ -56,6 +60,7 @@ async def chat(
 async def chat_audio(
     audio: UploadFile = File(..., description="Mono WAV"),
     session_id: str | None = Form(default=None),
+    user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ChatResponse:
     """One spoken turn, uploaded rather than streamed.
@@ -75,7 +80,7 @@ async def chat_audio(
             "That file couldn't be read as WAV audio. Mono 16-bit PCM works best."
         ) from exc
 
-    session = await orchestrator.get_or_create_session(db, session_id)
+    session = await orchestrator.get_or_create_session(db, session_id, user.id)
     set_session_id(session.id)
 
     result = await orchestrator.answer_audio(
@@ -99,7 +104,9 @@ async def chat_audio(
 
 
 @router.post("/analyze", tags=["acoustic"])
-async def analyze(audio: UploadFile = File(...)) -> dict[str, object]:
+async def analyze(
+    audio: UploadFile = File(...), user: User = Depends(current_user)
+) -> dict[str, object]:
     """Transcribe and analyze without generating a reply.
 
     This is the endpoint that makes the project's central claim inspectable
@@ -124,3 +131,4 @@ async def analyze(audio: UploadFile = File(...)) -> dict[str, object]:
         ],
         "acoustic": profile.model_dump(mode="json"),
     }
+

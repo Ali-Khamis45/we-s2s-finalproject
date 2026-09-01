@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { MicrophoneCapture } from "../audio/capture";
 import { StreamPlayer } from "../audio/player";
 import { api, wsUrl } from "../lib/api";
+import { fetchWsTicket } from "../lib/auth";
 import type {
   AcousticProfile,
   Citation,
@@ -295,11 +296,21 @@ export function useCoachSession() {
         return;
       }
 
+      // A fresh single-use ticket per connect, never cached. The socket cannot
+      // carry an Authorization header, and a JWT in the query string would be
+      // written into access logs and browser history.
+      const ticket = await fetchWsTicket();
+      if (!ticket) {
+        setError("Couldn't open the microphone connection. Try signing in again.");
+        setConnection("error");
+        return;
+      }
+
       const player = new StreamPlayer(wantLive ? LIVE_SAMPLE_RATE : 24_000);
       await player.resume();
       playerRef.current = player;
 
-      const socket = new WebSocket(wsUrl(path, { session_id: id }));
+      const socket = new WebSocket(wsUrl(path, { session_id: id, ticket }));
       socket.binaryType = "arraybuffer";
       socketRef.current = socket;
 

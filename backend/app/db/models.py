@@ -17,6 +17,7 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     DateTime,
     Float,
     ForeignKey,
@@ -25,6 +26,7 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -41,10 +43,104 @@ class Base(DeclarativeBase):
     type_annotation_map = {dict[str, Any]: JSON, list[Any]: JSON}
 
 
+class User(Base):
+    """An account.
+
+    Nothing here is clinical. `display_name` is what the interface greets
+    someone by; there is no role column, because there is no admin view and no
+    clinician view — a session belongs to exactly one person and nobody else
+    can read it (docs/ETHICS.md, and §3 of the auth brief).
+    """
+
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_new_id)
+    #: Stored lowercased so uniqueness is case-insensitive without CITEXT,
+    #: which SQLite does not have.
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    display_name: Mapped[str | None] = mapped_column(String(80))
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, server_default=func.now()
+    )
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: Designed for, deliberately not enforced in a local demo.
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("0"))
+
+    #: Lockout state. Never permanent — a permanent lock is a denial of service
+    #: anyone can trigger against a known address.
+    failed_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    memory_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("1"))
+
+    sessions: Mapped[list["Session"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class RefreshToken(Base):
+    """One issued refresh token.
+
+    Only the SHA-256 is stored: a database dump must not yield usable
+    credentials. `family_id` links every token descended from a single login,
+    so that presenting an already-rotated token — the signature of theft — can
+    revoke the whole lineage rather than just the one leaf.
+    """
+
+    __tablename__ = "refresh_tokens"
+    __table_args__ = (
+        Index("ix_refresh_user", "user_id"),
+        Index("ix_refresh_family", "family_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_new_id)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    family_id: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    issued_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    #: Set on rotation. A second presentation of a used token is a reuse attack.
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    user_agent: Mapped[str | None] = mapped_column(String(255))
+
+
+class WsTicket(Base):
+    """A 30-second, single-use ticket for opening a WebSocket.
+
+    Browsers cannot set an Authorization header on a WebSocket, and putting a
+    JWT in the query string writes a live credential into every access log and
+    into browser history. A ticket that dies in 30 seconds and cannot be
+    replayed is the cheap fix.
+    """
+
+    __tablename__ = "ws_tickets"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_new_id)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class Session(Base):
     __tablename__ = "sessions"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_new_id)
+    #: Every session has exactly one owner, resolved from the verified token and
+    #: never from anything the client sent.
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, server_default=func.now()
     )
@@ -58,6 +154,7 @@ class Session(Base):
         order_by="Turn.id",
         lazy="selectin",
     )
+    user: Mapped["User"] = relationship(back_populates="sessions")
 
 
 class Turn(Base):

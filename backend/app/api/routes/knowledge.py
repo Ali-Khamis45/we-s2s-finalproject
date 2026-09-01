@@ -33,6 +33,7 @@ import numpy as np
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
+from app.api.ws_auth import WS_UNAUTHORIZED, user_from_ticket
 from app.core.config import settings
 from app.core.errors import AppError
 from app.core.logging import get_logger, set_session_id, stage
@@ -60,13 +61,22 @@ async def _send_json(ws: WebSocket, type_: str, data: dict[str, Any]) -> None:
 
 
 @router.websocket("/ws/knowledge")
-async def knowledge_socket(websocket: WebSocket, session_id: str | None = None) -> None:
+async def knowledge_socket(
+    websocket: WebSocket, session_id: str | None = None, ticket: str | None = None
+) -> None:
     await websocket.accept()
     rate = settings.stt_sample_rate
 
     async with db_session() as db:
+        # Resolve the owner before reading anything. An unauthenticated socket
+        # must never reach the point of receiving a microphone frame.
+        user = await user_from_ticket(db, ticket)
+        if user is None:
+            await websocket.close(code=WS_UNAUTHORIZED)
+            return
+
         try:
-            session = await orchestrator.get_or_create_session(db, session_id)
+            session = await orchestrator.get_or_create_session(db, session_id, user.id)
             await db.commit()
         except Exception as exc:
             await _send_json(websocket, "error", {"message": str(exc)})

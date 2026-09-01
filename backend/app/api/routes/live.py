@@ -38,6 +38,7 @@ import numpy as np
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
+from app.api.ws_auth import WS_UNAUTHORIZED, user_from_ticket
 from app.core.config import settings
 from app.core.logging import get_logger, set_session_id
 from app.db.models import Session as SessionRow
@@ -77,12 +78,20 @@ async def _send_bytes(ws: WebSocket, payload: bytes) -> None:
 
 
 @router.websocket("/ws/live")
-async def live_socket(websocket: WebSocket, session_id: str | None = None) -> None:
+async def live_socket(
+    websocket: WebSocket, session_id: str | None = None, ticket: str | None = None
+) -> None:
     await websocket.accept()
 
     async with db_session() as db:
+        # Owner first, before any audio is read.
+        user = await user_from_ticket(db, ticket)
+        if user is None:
+            await websocket.close(code=WS_UNAUTHORIZED)
+            return
+
         try:
-            session = await orchestrator.get_or_create_session(db, session_id)
+            session = await orchestrator.get_or_create_session(db, session_id, user.id)
             await db.commit()
         except Exception as exc:
             await _send_json(websocket, "error", {"message": str(exc)})

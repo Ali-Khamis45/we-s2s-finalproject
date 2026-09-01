@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { Link } from "react-router-dom";
 
 import { Atmosphere } from "./components/Atmosphere";
 import { Composer } from "./components/Composer";
@@ -8,9 +9,11 @@ import { SessionHistory } from "./components/SessionHistory";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { Banner, Pill } from "./components/ui/primitives";
 import { useCoachSession } from "./hooks/useCoachSession";
+import { useAuth } from "./lib/AuthContext";
 
 export default function App() {
   const session = useCoachSession();
+  const { user } = useAuth();
 
   // Refetch the dashboard when a turn completes, not on a timer.
   const refreshKey = useMemo(
@@ -70,6 +73,9 @@ export default function App() {
           </div>
 
           <div className="mast-controls rise rise-3">
+            <Link className="theme-toggle" to="/settings">
+              {user?.display_name || user?.email?.split("@")[0] || "Account"}
+            </Link>
             <ThemeToggle />
             <Pill
               tone={live ? "live" : connected ? "grounded" : "quiet"}

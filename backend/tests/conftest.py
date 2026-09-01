@@ -1,13 +1,14 @@
-"""Test fixtures.
+﻿"""Test fixtures.
 
 Every test runs against a throwaway SQLite file and never touches a model. The
-point is to prove the plumbing — routing, persistence, prompt assembly,
-degradation — holds independently of whether weights are downloaded, because
+point is to prove the plumbing â€” routing, persistence, prompt assembly,
+degradation â€” holds independently of whether weights are downloaded, because
 that is the state a fresh clone is in.
 """
 
 from __future__ import annotations
 
+import itertools
 import os
 import tempfile
 from collections.abc import Iterator
@@ -22,6 +23,10 @@ os.environ["SCC_DATABASE_URL"] = f"sqlite+aiosqlite:///{(_TMP / 'test.db').as_po
 os.environ["SCC_CHROMA_DIR"] = str(_TMP / "chroma")
 os.environ["SCC_CORPUS_DIR"] = str(_TMP / "corpus")
 os.environ["SCC_MOSHI_ENABLED"] = "false"
+# A fixed, throwaway secret so tokens are stable within a test run. The app
+# generates one per process in debug; pinning it here keeps tests deterministic.
+os.environ["SCC_JWT_SECRET"] = "test-secret-not-for-any-real-deployment-0123456789"
+os.environ["SCC_DEBUG"] = "true"
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -35,12 +40,62 @@ def client() -> Iterator[TestClient]:
         yield c
 
 
+_counter = itertools.count()
+
+
+def make_account(client: TestClient, password: str = "practice-speaking-2026") -> dict:
+    """Register a fresh account and return its credentials plus access token.
+
+    Each call uses a new address, so tests never collide through the shared
+    database or through the login rate limiter.
+    """
+    email = f"user{next(_counter)}@speechcoach-test.org"
+    r = client.post(
+        "/api/auth/register", json={"email": email, "password": password}
+    )
+    assert r.status_code == 201, r.text
+    body = r.json()
+    return {
+        "email": email,
+        "password": password,
+        "token": body["access_token"],
+        "user": body["user"],
+        "headers": {"Authorization": f"Bearer {body['access_token']}"},
+    }
+
+
+@pytest.fixture
+def account(client: TestClient) -> dict:
+    """One signed-in account."""
+    from app.services.auth import limiter
+
+    limiter.clear()
+    return make_account(client)
+
+
+@pytest.fixture
+def authed_client(client: TestClient, account: dict) -> Iterator[TestClient]:
+    """A client whose requests carry a valid access token.
+
+    Introduced alongside the auth boundary: routes that were public are now
+    owner-scoped, so the existing API tests move onto this rather than being
+    rewritten later to hide the change.
+    """
+    previous = dict(client.headers)
+    client.headers.update(account["headers"])
+    try:
+        yield client
+    finally:
+        client.headers.clear()
+        client.headers.update(previous)
+
+
 @pytest.fixture
 def llm_offline(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Point the LLM client at an address that will refuse the connection.
 
     Degradation tests must not assume nothing happens to be listening on the
-    real port — anyone running llama-server locally (as the verification
+    real port â€” anyone running llama-server locally (as the verification
     scripts do) would otherwise see these fail for the wrong reason. Port 9 is
     the discard service and is reliably closed.
 
@@ -54,3 +109,4 @@ def llm_offline(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     llm_service._client = None
     yield
     llm_service._client = None
+

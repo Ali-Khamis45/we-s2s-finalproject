@@ -1,10 +1,10 @@
-"""Application entrypoint (A2).
+﻿"""Application entrypoint (A2).
 
 Run with:  uvicorn app.main:app --reload   (from the backend/ directory)
 
 Startup deliberately loads no models. On a fresh clone nothing has been
 downloaded, and a server that refuses to boot without weights is a server
-nobody can debug — `GET /api/status` reports what is actually available, and
+nobody can debug â€” `GET /api/status` reports what is actually available, and
 each service loads on first use. Set SCC_EAGER_LOAD=1 to warm STT and TTS at
 boot instead, which is what you want before a demo.
 """
@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app import __version__
-from app.api.routes import chat, corpus, health, knowledge, live, sessions
+from app.api.routes import auth, chat, corpus, health, knowledge, live, sessions
 from app.core.config import settings
 from app.core.errors import register_error_handlers
 from app.core.logging import (
@@ -39,6 +39,9 @@ log = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     configure_logging()
+    # Refuses to start on a missing or weak signing secret outside debug. A
+    # committed default would let anyone mint a token for any account.
+    settings.validate_runtime()
     settings.ensure_dirs()
     await init_db()
 
@@ -73,7 +76,7 @@ app = FastAPI(
     version=__version__,
     description=(
         "A native speech-to-speech coach for building communication confidence. "
-        "Accessibility tool, not a medical device — see docs/ETHICS.md."
+        "Accessibility tool, not a medical device â€” see docs/ETHICS.md."
     ),
     lifespan=lifespan,
 )
@@ -107,6 +110,7 @@ async def request_context(request: Request, call_next):  # type: ignore[no-untyp
 register_error_handlers(app)
 
 app.include_router(health.router)
+app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(sessions.router)
 app.include_router(corpus.router)
@@ -124,3 +128,4 @@ async def root() -> JSONResponse:
             "status": "/api/status",
         }
     )
+
