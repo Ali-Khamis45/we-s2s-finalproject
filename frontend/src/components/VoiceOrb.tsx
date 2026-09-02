@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useReducedMotionSafe } from "../hooks/useReducedMotionSafe";
+import { FluidSurface } from "./FluidSurface";
 import { useSmoothed } from "../hooks/useSmoothed";
 
 /**
@@ -41,6 +42,14 @@ export function VoiceOrb({ state, micLevel, size = 92 }: Props) {
   const stateRef = useRef<OrbState>(state);
   const reduced = useReducedMotionSafe();
   const smooth = useSmoothed(45, 420, 0);
+  // Assume the shader works until it says otherwise, so the common case
+  // never flashes the fallback first.
+  const [fluid, setFluid] = useState(true);
+  const fluidRef = useRef(true);
+  // The fluid core replaces the flat fill, so the 2D pass draws only the
+  // rings and arcs that carry state.
+  const fluidCore = fluid && !reduced && (state === "live" || state === "speaking");
+  fluidRef.current = fluidCore;
 
   level.current = micLevel;
   stateRef.current = state;
@@ -130,6 +139,8 @@ export function VoiceOrb({ state, micLevel, size = 92 }: Props) {
 
       // The core, as a lit sphere rather than a flat fill: the highlight sits
       // up and left, so it reads as a light source with a direction.
+      // Skipped when the shader is drawing the core beneath this canvas.
+      if (!fluidRef.current) {
       const core = ctx.createRadialGradient(
         cx - radius * 0.3,
         cy - radius * 0.34,
@@ -146,6 +157,7 @@ export function VoiceOrb({ state, micLevel, size = 92 }: Props) {
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, Math.PI * 2);
       ctx.fill();
+      }
 
       // A live reactive ring just outside the core, so loudness is legible as
       // distance and not only as size.
@@ -185,12 +197,22 @@ export function VoiceOrb({ state, micLevel, size = 92 }: Props) {
   }, [reduced, size, smooth]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="orb"
-      style={{ width: size, height: size }}
-      aria-hidden="true"
-    />
+    <span className="orb-stack" style={{ width: size, height: size }}>
+      {fluidCore && (
+        <FluidSurface
+          className="orb-fluid"
+          variant="orb"
+          intensity={state === "live" ? micLevel : 0.12}
+          onSupport={setFluid}
+        />
+      )}
+      <canvas
+        ref={canvasRef}
+        className="orb"
+        style={{ width: size, height: size }}
+        aria-hidden="true"
+      />
+    </span>
   );
 }
 

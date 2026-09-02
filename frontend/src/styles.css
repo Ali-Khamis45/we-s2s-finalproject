@@ -1376,3 +1376,25 @@ a.btn { text-decoration: none; }
 /* The disclaimer stays visible, never collapsed. */
 .foot strong { color: var(--ink-2); font-weight: 500; }
 
+
+/* ============================================== fluid orb (WebGL layer) */
+
+.orb-stack {
+  position: relative;
+  display: inline-block;
+  flex: none;
+}
+
+/* The shader draws the core; the 2D canvas above it draws the rings and arcs
+ * that carry state. Inset to the core radius so the rim stays crisp. */
+.orb-fluid {
+  position: absolute;
+  inset: 18%;
+  border-radius: var(--r-full);
+  display: block;
+}
+
+.orb-stack .orb {
+  position: relative;
+  z-index: 1;
+}
