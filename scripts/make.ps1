@@ -19,15 +19,15 @@ $Repo = Split-Path $PSScriptRoot -Parent
 $Py = Join-Path $Repo "backend\.venv\Scripts\python.exe"
 $env:PYTHONPATH = Join-Path $Repo "backend"
 
-function Invoke-Backend([string[]]$Args) {
+function Invoke-Backend([string[]]$CmdArgs) {
     Push-Location (Join-Path $Repo "backend")
-    try { & $Py @Args; if ($LASTEXITCODE -ne 0) { throw "failed: $($Args -join ' ')" } }
+    try { & $Py @CmdArgs; if ($LASTEXITCODE -ne 0) { throw "failed: $($CmdArgs -join ' ')" } }
     finally { Pop-Location }
 }
 
-function Invoke-Frontend([string[]]$Args) {
+function Invoke-Frontend([string[]]$CmdArgs) {
     Push-Location (Join-Path $Repo "frontend")
-    try { & npx @Args; if ($LASTEXITCODE -ne 0) { throw "failed: npx $($Args -join ' ')" } }
+    try { & npx @CmdArgs; if ($LASTEXITCODE -ne 0) { throw "failed: npx $($CmdArgs -join ' ')" } }
     finally { Pop-Location }
 }
 
@@ -93,16 +93,22 @@ switch ($Target) {
     "check-types" {
         & $Py (Join-Path $Repo "backend\scripts\dump_openapi.py") "--check"
         if ($LASTEXITCODE -ne 0) { throw "committed schema is stale" }
-        $tmp = Join-Path $env:TEMP "api-types.check.ts"
-        Remove-Item $tmp -ErrorAction SilentlyContinue
-        Invoke-Frontend @("openapi-typescript", "../docs/openapi.json", "-o", $tmp)
+        # Generated with a path relative to frontend/, which is where npx
+        # runs. An absolute Windows path here was one more thing to get
+        # wrong, and it silently produced no file.
+        $rel = "src/lib/api-types.check.ts"
+        $tmp = Join-Path $Repo "frontend\src\lib\api-types.check.ts"
         $current = Join-Path $Repo "frontend\src\lib\api-types.gen.ts"
+        Remove-Item $tmp -ErrorAction SilentlyContinue
+        Invoke-Frontend @("openapi-typescript", "../docs/openapi.json", "-o", $rel)
+        if (-not (Test-Path $tmp)) { throw "type generation produced no output" }
 
         # Compare content, not bytes. git's autocrlf gives a Windows checkout
         # CRLF while the generator always emits LF, so a byte comparison would
         # report every Windows clone as stale.
         $fresh = (Get-Content $tmp -Raw) -replace "`r`n", "`n"
         $committed = (Get-Content $current -Raw) -replace "`r`n", "`n"
+        Remove-Item $tmp -ErrorAction SilentlyContinue
         if ($fresh -ne $committed) {
             throw "api-types.gen.ts is stale. Run: .\scripts\make.ps1 types"
         }

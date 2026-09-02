@@ -46,14 +46,21 @@ def main() -> int:
     text = json.dumps(schema, indent=2, sort_keys=True) + "\n"
 
     changed = not OUT.exists() or OUT.read_text(encoding="utf-8") != text
-    OUT.write_text(text, encoding="utf-8")
+    check_only = "--check" in sys.argv
+
+    # In --check mode the file is never touched. CI runs this to detect drift,
+    # and a checker that rewrites the thing it is checking leaves a dirty tree
+    # and makes a follow-up `git diff --exit-code` meaningless.
+    if not check_only:
+        OUT.write_text(text, encoding="utf-8")
 
     paths = len(schema.get("paths", {}))
     models = len(schema.get("components", {}).get("schemas", {}))
-    print(f"{'updated' if changed else 'unchanged'}: {OUT.relative_to(REPO)}")
+    state = "stale" if (check_only and changed) else ("updated" if changed else "unchanged")
+    print(f"{state}: {OUT.relative_to(REPO)}")
     print(f"  {paths} paths, {models} schemas")
 
-    if "--check" in sys.argv and changed:
+    if check_only and changed:
         print(
             "\nThe committed schema is out of date. Run:\n"
             "    python backend/scripts/dump_openapi.py\n"
