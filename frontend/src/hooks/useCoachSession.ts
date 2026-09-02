@@ -33,7 +33,7 @@ const nextId = () => `m${++messageSeq}`;
  * between the two modes.
  *
  * The mode switch is the part worth understanding. Live Coach is preferred
- * because it answers in ~200 ms, but it cannot retrieve â€” so when the server
+ * because it answers in ~200 ms, but it cannot retrieve — so when the server
  * flags a turn as needing reference material, this reconnects on the knowledge
  * socket, replays the question there, and reports the switch to the user. The
  * conversation is one thread throughout; the server keeps both modes writing
@@ -210,7 +210,7 @@ export function useCoachSession() {
 
         case "acoustic": {
           const profile = data as unknown as AcousticProfile;
-          // Attach to the most recent user message â€” the one it describes.
+          // Attach to the most recent user message — the one it describes.
           setMessages((prev) => {
             for (let i = prev.length - 1; i >= 0; i--) {
               if (prev[i].role === "user" && !prev[i].acoustic) {
@@ -330,7 +330,7 @@ export function useCoachSession() {
           setListening(true);
         } catch {
           setError(
-            "Microphone access was blocked. You can still type â€” allow the mic to speak.",
+            "Microphone access was blocked. You can still type — allow the mic to speak.",
           );
         }
       };
@@ -438,7 +438,7 @@ export function useCoachSession() {
    * Replay a stored session.
    *
    * The backend has persisted every turn since the first commit, including the
-   * acoustic profile and citations, but nothing in the UI ever read them back â€”
+   * acoustic profile and citations, but nothing in the UI ever read them back —
    * so conversation history existed in the database and nowhere a user could
    * see it. This loads one and continues it: further turns append to the same
    * session rather than starting a new one.

@@ -95,15 +95,7 @@ function MessageBubble({
             ungrounded
           </span>
         )}
-        {message.timings && message.timings.length > 0 ? (
-          <span className="turn-ms">
-            <TurnTimings
-              timings={message.timings}
-              totalMs={message.totalMs}
-              compareWith={compareWith}
-            />
-          </span>
-        ) : message.totalMs ? (
+        {message.totalMs && !(message.timings && message.timings.length) ? (
           <span className="turn-ms" title="Time from your speech to this reply">
             {Math.round(message.totalMs)} ms
           </span>
@@ -114,6 +106,14 @@ function MessageBubble({
         {message.text}
         {message.pending && <span className="caret" aria-hidden="true" />}
       </p>
+
+      {message.timings && message.timings.length > 0 && (
+        <TurnTimings
+          timings={message.timings}
+          totalMs={message.totalMs}
+          compareWith={compareWith}
+        />
+      )}
 
       {message.acoustic?.analyzed && (
         <DysfluencyTimeline profile={message.acoustic} compact />

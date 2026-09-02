@@ -52,7 +52,7 @@ export function AuthScreen({ mode }: { mode: "login" | "register" }) {
 
   return (
     <>
-      {/* The same room as the app itself â€” signing in should not feel like a
+      {/* The same room as the app itself — signing in should not feel like a
           different product. Idle: no mic, so the lamp sits at its resting
           warmth. */}
       <Atmosphere micLevel={0} listening={false} connected={false} />
@@ -128,8 +128,8 @@ export function AuthScreen({ mode }: { mode: "login" | "register" }) {
           >
             {busy
               ? isRegister
-                ? "Creating your accountâ€¦"
-                : "Signing inâ€¦"
+                ? "Creating your account…"
+                : "Signing in…"
               : isRegister
                 ? "Create account"
                 : "Sign in"}
@@ -143,7 +143,7 @@ export function AuthScreen({ mode }: { mode: "login" | "register" }) {
             Practice transcripts are saved so you can look back at them.{" "}
             <strong>Audio is never stored.</strong> You can export or delete
             everything at any time. This is a practice tool, not a medical
-            device â€” it doesn&rsquo;t diagnose or assess anyone.
+            device — it doesn&rsquo;t diagnose or assess anyone.
           </p>
         )}
 
@@ -176,7 +176,7 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    // Label above the field, never a placeholder standing in for one â€” a
+    // Label above the field, never a placeholder standing in for one — a
     // placeholder disappears the moment someone starts typing.
     <label className="field">
       <span className="field-label">

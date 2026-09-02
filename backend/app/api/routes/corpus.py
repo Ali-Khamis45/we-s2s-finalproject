@@ -1,7 +1,7 @@
 ﻿"""Knowledge base administration (A9).
 
-Ingestion is a slow, blocking operation on CPU â€” embedding a few hundred chunks
-takes tens of seconds â€” so it is an explicit endpoint rather than something that
+Ingestion is a slow, blocking operation on CPU — embedding a few hundred chunks
+takes tens of seconds — so it is an explicit endpoint rather than something that
 happens on startup.
 """
 

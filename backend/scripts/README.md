@@ -37,16 +37,25 @@ script only needs three mono 16-bit WAV files named `i`, `want`, `water`.
 python scripts/verify_acoustic_branch.py scripts/words
 ```
 
-Measured on first run (Whisper `small` int8, heuristic analyzer):
+Measured on the shipped configuration (Whisper `base` int8, heuristic
+analyzer). The word audio is re-synthesized each run, so expect the numbers to
+move by a few tens of milliseconds — the checks assert tolerances, not exact
+values:
 
 | Ground truth | Measured | Error |
 |---|---|---|
-| Block 1400 ms | 1480 ms | 80 ms |
-| Block at 1345 ms | 1240 ms | 105 ms |
-| Word repetition | detected ×3 | — |
+| Block 1400 ms | 1500 ms | 100 ms |
+| Block at 1345 ms | 1200 ms | 145 ms |
+| Word repetition | detected ×2 | — |
+| Utterance 3157 ms | 3158 ms | 1 ms |
 
-Whisper's transcript was `"I, I, I, I, want. Water please."` — the block is
-entirely absent from it. That contrast is the figure to put in the report.
+Whisper's transcript was `"I, I, I, want Water"` — the block is entirely absent
+from it. That contrast is the figure to put in the report.
+
+The repetition is reported as two overlapping events rather than three
+discrete ones: the detector marks spans, and three "I"s 300 ms apart produce
+two overlapping repetition spans. The count in the UI is of events, not of
+repeated syllables.
 
 Note the error bound is set by Whisper's word-timestamp resolution, not by the
 analyzer. Re-run once Track M's trained classifier (M4) is wired in; it should

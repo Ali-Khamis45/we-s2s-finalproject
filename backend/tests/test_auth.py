@@ -98,7 +98,7 @@ class TestLogin:
             ).status_code
             for _ in range(6)
         ]
-        # Either locked or rate limited â€” both are 429, and both stop the attack.
+        # Either locked or rate limited — both are 429, and both stop the attack.
         assert 429 in codes
 
     def test_lockout_is_never_permanent(self, client: TestClient):
@@ -146,7 +146,7 @@ class TestTokens:
         replay = client.post("/api/auth/refresh")
         assert replay.status_code == 401
 
-        # And the legitimate descendant is now dead too â€” the whole family went.
+        # And the legitimate descendant is now dead too — the whole family went.
         client.cookies.clear()
         assert client.post("/api/auth/refresh").status_code == 401
 
@@ -206,7 +206,7 @@ class TestPasswordChange:
 
 class TestAccountDeletion:
     def test_delete_removes_every_row(self, client: TestClient):
-        """Erasure means erasure â€” no is_deleted flag, no orphaned transcripts."""
+        """Erasure means erasure — no is_deleted flag, no orphaned transcripts."""
         import anyio
         from sqlalchemy import func, select
 

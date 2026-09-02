@@ -67,7 +67,7 @@ export default function App() {
               Speech <span className="brand-accent">Confidence</span> Coach
             </h1>
             <p className="brand-sub rise rise-2">
-              Practice speaking with a coach that listens to how you say it â€” not
+              Practice speaking with a coach that listens to how you say it — not
               only what you say.
             </p>
           </div>
@@ -130,7 +130,7 @@ export default function App() {
         </main>
 
         <footer className="foot">
-          <strong>An accessibility practice tool.</strong> Not a medical device â€”
+          <strong>An accessibility practice tool.</strong> Not a medical device —
           it doesn&rsquo;t diagnose or assess anyone.
         </footer>
       </div>

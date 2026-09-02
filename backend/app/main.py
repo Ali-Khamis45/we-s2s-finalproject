@@ -4,7 +4,7 @@ Run with:  uvicorn app.main:app --reload   (from the backend/ directory)
 
 Startup deliberately loads no models. On a fresh clone nothing has been
 downloaded, and a server that refuses to boot without weights is a server
-nobody can debug â€” `GET /api/status` reports what is actually available, and
+nobody can debug — `GET /api/status` reports what is actually available, and
 each service loads on first use. Set SCC_EAGER_LOAD=1 to warm STT and TTS at
 boot instead, which is what you want before a demo.
 """
@@ -76,7 +76,7 @@ app = FastAPI(
     version=__version__,
     description=(
         "A native speech-to-speech coach for building communication confidence. "
-        "Accessibility tool, not a medical device â€” see docs/ETHICS.md."
+        "Accessibility tool, not a medical device — see docs/ETHICS.md."
     ),
     lifespan=lifespan,
 )

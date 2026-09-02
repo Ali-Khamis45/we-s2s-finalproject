@@ -2,7 +2,7 @@
 @import "./styles/base.css";
 @import "./styles/atmosphere.css";
 
-/* Night Studio â€” component layer.
+/* Night Studio — component layer.
  *
  * Rules carried through every block below:
  *   - amber is rationed: one fully saturated element at a time
@@ -93,7 +93,7 @@
   font-weight: 500;
   color: var(--muted);
   white-space: nowrap;
-  /* Width animates as the label changes, so Liveâ†”Grounded morphs. */
+  /* Width animates as the label changes, so Live↔Grounded morphs. */
   transition:
     color var(--t-base) var(--e-in-out),
     border-color var(--t-base) var(--e-in-out),
@@ -537,7 +537,7 @@
 }
 
 /* Continuous speech. Events are drawn as interruptions of it, because a block
- * IS an absence â€” drawing silence as a positive object misrepresents it. */
+ * IS an absence — drawing silence as a positive object misrepresents it. */
 .timeline-speech {
   position: absolute;
   inset: 10px 0;
@@ -552,7 +552,7 @@
   to { transform: scaleX(1); }
 }
 
-/* left/width stay percentage inline styles â€” they are the to-scale geometry
+/* left/width stay percentage inline styles — they are the to-scale geometry
  * and two tests assert them. Motion rides on transform only. */
 .timeline-event {
   position: absolute;
@@ -661,8 +661,6 @@
 
 /* ======================================================== turn timings */
 
-.tt { display: inline-flex; }
-
 .tt-chip {
   display: inline-flex;
   align-items: center;
@@ -677,10 +675,14 @@
 
 .tt-chip:hover { color: var(--ink); border-color: var(--rule); }
 
+.tt {
+  display: block;
+  margin-top: var(--sp-3);
+}
+
 .tt-body {
-  position: absolute;
-  left: var(--sp-4);
-  right: var(--sp-4);
+  /* Flows rather than floats. Absolutely positioned, it covered the reply it
+     was describing. */
   margin-top: var(--sp-2);
   padding: var(--sp-3);
   border-radius: var(--r-md);
@@ -1008,7 +1010,7 @@
 
 .btn:disabled { opacity: 0.45; }
 
-/* Fills from the left as the action becomes available â€” disabled â†’ enabled is
+/* Fills from the left as the action becomes available — disabled → enabled is
  * a transition, not a repaint. */
 .btn-primary::before {
   content: "";
@@ -1154,7 +1156,7 @@
   stroke-linejoin: round;
   /* Fails safe: the resting state is fully drawn, and the animation runs
    * *from* hidden. Resting on hidden would leave the line invisible anywhere
-   * animations do not run â€” reduced motion, a print, a screenshot tool. */
+   * animations do not run — reduced motion, a print, a screenshot tool. */
   stroke-dasharray: var(--chart-len, 1000);
   stroke-dashoffset: 0;
   animation: draw-line var(--t-scene) var(--e-out) backwards;

@@ -1,8 +1,8 @@
 ﻿"""Test fixtures.
 
 Every test runs against a throwaway SQLite file and never touches a model. The
-point is to prove the plumbing â€” routing, persistence, prompt assembly,
-degradation â€” holds independently of whether weights are downloaded, because
+point is to prove the plumbing — routing, persistence, prompt assembly,
+degradation — holds independently of whether weights are downloaded, because
 that is the state a fresh clone is in.
 """
 
@@ -95,7 +95,7 @@ def llm_offline(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Point the LLM client at an address that will refuse the connection.
 
     Degradation tests must not assume nothing happens to be listening on the
-    real port â€” anyone running llama-server locally (as the verification
+    real port — anyone running llama-server locally (as the verification
     scripts do) would otherwise see these fail for the wrong reason. Port 9 is
     the discard service and is reliably closed.
 

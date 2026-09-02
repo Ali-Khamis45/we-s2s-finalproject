@@ -1020,7 +1020,7 @@
     }
   },
   "info": {
-    "description": "A native speech-to-speech coach for building communication confidence. Accessibility tool, not a medical device \u00e2\u20ac\u201d see docs/ETHICS.md.",
+    "description": "A native speech-to-speech coach for building communication confidence. Accessibility tool, not a medical device \u2014 see docs/ETHICS.md.",
     "title": "Speech Confidence Coach",
     "version": "contract"
   },

@@ -62,7 +62,7 @@ def _set_refresh_cookie(response: Response, token: str) -> None:
         token,
         max_age=settings.refresh_token_days * 24 * 3600,
         httponly=True,
-        # Conditioned on debug so localhost http works â€” never removed.
+        # Conditioned on debug so localhost http works — never removed.
         secure=not settings.debug,
         samesite="strict",
         path=settings.refresh_cookie_path,
@@ -136,7 +136,7 @@ async def register(
         # Deliberately indistinguishable from a fresh signup: same status, same
         # shape, same cost. Returning 409 here would turn this endpoint into an
         # oracle for which addresses have accounts. The existing account is NOT
-        # signed in â€” that would hand it to whoever guessed the address.
+        # signed in — that would hand it to whoever guessed the address.
         log.info("register: address already in use", extra={"outcome": "silent"})
         svc.verify_password(None, payload.password)
         return await _decoy_response(db, response, request, payload)
@@ -159,7 +159,7 @@ async def _decoy_response(
 ) -> AuthResponse:
     """A 201-shaped answer for an address that already exists.
 
-    No account is created and no session is issued â€” the returned token belongs
+    No account is created and no session is issued — the returned token belongs
     to nobody and will fail on first use. The point is only that the *response*
     reveals nothing.
     """
@@ -237,7 +237,7 @@ async def refresh(
         raise UnauthorizedError()
 
     # Reuse detection. A token that has already been rotated should never be
-    # presented again â€” if it is, either it was stolen or a clone is running,
+    # presented again — if it is, either it was stolen or a clone is running,
     # and in both cases every descendant of that login is suspect. Revoking the
     # whole family is the entire reason rotation is worth the complexity.
     if row.used_at is not None:
