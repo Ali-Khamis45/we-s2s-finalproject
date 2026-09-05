@@ -69,13 +69,13 @@ bench-fast: ## The model-free subset CI can run: proves the harness executes
 eval-retrieval: ## Recall@k, MRR, nDCG and the gate curve (needs the corpus)
 	$(PY) $(BACKEND)/scripts/calibrate_gate.py
 
-moshi-serve: ## Start Kyutai's Candle server (needs GPU + weights; not the relay)
+moshi-serve: ## Start Kyutai's Candle server (needs GPU + weights; not the bridge)
 	@echo "NOTE: this bring-up was done and verified on Windows; scripts/make.ps1 moshi-serve"
 	@echo "is the tested path. This target is provided for parity but is untested on Linux/macOS"
 	@echo "(binary name and venv layout below assume a Windows build)."
 	@echo "candle server https://localhost:8999 (internal, Kyutai's real protocol)"
-	@echo "relay is NOT started here -- moshi-bench starts its own; for manual"
-	@echo "testing run: $(BACKEND)/.venv/Scripts/python.exe ml/moshi/relay.py"
+	@echo "bridge is NOT started here -- moshi-bench starts its own; for manual"
+	@echo "testing run: $(BACKEND)/.venv/Scripts/python.exe ml/moshi/bridge.py"
 	CUDA_COMPUTE_CAP=120 sh -c 'cd ml/moshi/candle-moshi/rust && ./target/release/moshi-backend.exe --config moshi-backend/config-q8.json standalone'
 
 moshi-bench: ## Measure Moshi time-to-first-audio p50/p95 (needs moshi-serve running)

@@ -46,7 +46,7 @@ switch ($Target) {
   check-types    Fail if the committed schema or types are stale (CI)
   bench          Full verification run - NEEDS MODELS, not for CI
   bench-fast     The model-free subset CI can run
-  moshi-serve    Start Kyutai's Candle server (needs GPU + weights; not the relay)
+  moshi-serve    Start Kyutai's Candle server (needs GPU + weights; not the bridge)
   moshi-bench    Measure Moshi time-to-first-audio p50/p95 (needs moshi-serve running)
   clean          Remove build output and caches
 "@
@@ -130,17 +130,16 @@ switch ($Target) {
     }
 
     "moshi-serve" {
-        # Just the Candle server -- moshi-bench manages its own relay
-        # subprocess per iteration (see ml/moshi/bench_moshi_latency.py), and
-        # for interactive/manual testing the relay is a separate foreground
-        # process anyway (`backend\.venv\Scripts\python.exe ml\moshi\relay.py`)
-        # since it segfaults on connection teardown and needs restarting
-        # between sessions (see docs/M1_BRINGUP_LOG.md, Task 6 findings). So
-        # this target's only job is: bring up the Candle server on 8999 and
-        # confirm it's listening.
+        # Just the Candle server -- moshi-bench manages its own bridge
+        # subprocess, started once and reused across iterations (see
+        # ml/moshi/bench_moshi_latency.py); for interactive/manual testing
+        # the bridge is a separate foreground process
+        # (`backend\.venv\Scripts\python.exe ml\moshi\bridge.py`).
+        # So this target's only job is: bring up the Candle server on 8999
+        # and confirm it's listening.
         Write-Host "candle server https://localhost:8999 (internal, Kyutai's real protocol)"
-        Write-Host "relay is NOT started here -- moshi-bench starts its own; for manual"
-        Write-Host "testing run: backend\.venv\Scripts\python.exe ml\moshi\relay.py"
+        Write-Host "bridge is NOT started here -- moshi-bench starts its own; for manual"
+        Write-Host "testing run: backend\.venv\Scripts\python.exe ml\moshi\bridge.py"
         $rustDir = Join-Path $Repo "ml\moshi\candle-moshi\rust"
         $exe = Join-Path $rustDir "target\release\moshi-backend.exe"
         if (-not (Test-Path $exe)) { throw "moshi-backend.exe not found -- build it first (see docs/M1_BRINGUP_LOG.md)" }
