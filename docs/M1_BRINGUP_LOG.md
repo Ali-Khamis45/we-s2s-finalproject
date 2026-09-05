@@ -432,3 +432,24 @@ root `Makefile`.
   expected and already accepted per the M1 plan; M2's production bridge is
   where that attribution should be confirmed with a cleaner measurement,
   ideally with per-stage timing instrumentation if the gap doesn't close.
+
+## M2 addendum (2026-09-05)
+
+`ml/moshi/relay.py` has been replaced by `ml/moshi/bridge.py` (PyAV-backed
+codec layer). All three bugs documented above under "Known limitations" are
+fixed and verified against the live Candle server with real speech content:
+no segfault across repeated connect/disconnect cycles on one bridge
+process, no crash on real (non-silent) speech PCM, and upstream failures
+now reach the client as an `OUR_ERROR` frame. See
+`docs/superpowers/specs/2026-09-05-m2-moshi-bridge-design.md` for the full
+design record and the pre-implementation spike findings that drove it.
+
+Live validation (2026-09-05, one bridge process, real speech fixture
+`backend/scripts/words/dysfluent_utterance.wav`, four consecutive
+connect/disconnect cycles against the same process): all four runs
+completed cleanly with audio returned every time (one run also surfaced
+Inner Monologue text, `"Hello"`), zero crashes, zero segfaults, clean
+`connection open`/`client connected`/`client disconnected` log lines
+throughout. This is the direct regression check for the relay's
+segfault-on-teardown bug, which only manifested on the second or later
+connection to one relay process — confirmed fixed.
