@@ -33,6 +33,12 @@ yarn-error.log*
 # Root-scoped: must not swallow backend/app/models/, which is source code.
 /models/
 ml/moshi/weights/
+ml/moshi/weights-q8/
+ml/moshi/weights-q4/
+# M1: third-party Candle clone, downloaded model weights (auto-fetched
+# by moshi-backend into the HF cache, not here, but kept as a safeguard),
+# and the local dev TLS cert.
+ml/moshi/candle-moshi/
 ml/finetuning/checkpoints/
 ml/finetuning/adapters/
 
