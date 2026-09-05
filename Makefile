@@ -15,7 +15,7 @@ export PYTHONPATH
 
 .DEFAULT_GOAL := help
 .PHONY: help setup dev test test-backend test-frontend lint types check-types \
-        bench bench-fast eval-retrieval schema clean
+        bench bench-fast eval-retrieval schema moshi-serve moshi-bench clean
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -68,6 +68,15 @@ bench-fast: ## The model-free subset CI can run: proves the harness executes
 
 eval-retrieval: ## Recall@k, MRR, nDCG and the gate curve (needs the corpus)
 	$(PY) $(BACKEND)/scripts/calibrate_gate.py
+
+moshi-serve: ## Start Kyutai's Candle server (needs GPU + weights; not the relay)
+	@echo "candle server https://localhost:8999 (internal, Kyutai's real protocol)"
+	@echo "relay is NOT started here -- moshi-bench starts its own; for manual"
+	@echo "testing run: $(BACKEND)/.venv/bin/python ml/moshi/relay.py"
+	CUDA_COMPUTE_CAP=120 sh -c 'cd ml/moshi/candle-moshi/rust && ./target/release/moshi-backend --config moshi-backend/config-q8.json standalone'
+
+moshi-bench: ## Measure Moshi time-to-first-audio p50/p95 (needs moshi-serve running)
+	$(PY) $(CURDIR)/ml/moshi/bench_moshi_latency.py $(BACKEND)/scripts/words/dysfluent_utterance.wav 10
 
 clean: ## Remove build output and caches
 	rm -rf $(FRONTEND)/dist $(BACKEND)/.pytest_cache

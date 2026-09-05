@@ -10,7 +10,8 @@
 param(
     [Parameter(Position = 0)]
     [ValidateSet("help", "setup", "dev", "test", "test-backend", "test-frontend",
-                 "lint", "schema", "types", "check-types", "bench", "bench-fast", "clean")]
+                 "lint", "schema", "types", "check-types", "bench", "bench-fast",
+                 "moshi-serve", "moshi-bench", "clean")]
     [string]$Target = "help"
 )
 
@@ -45,6 +46,8 @@ switch ($Target) {
   check-types    Fail if the committed schema or types are stale (CI)
   bench          Full verification run - NEEDS MODELS, not for CI
   bench-fast     The model-free subset CI can run
+  moshi-serve    Start Kyutai's Candle server (needs GPU + weights; not the relay)
+  moshi-bench    Measure Moshi time-to-first-audio p50/p95 (needs moshi-serve running)
   clean          Remove build output and caches
 "@
     }
@@ -124,6 +127,39 @@ switch ($Target) {
 
     "bench-fast" {
         Invoke-Backend @("-m", "pytest", "-q", "tests/test_acoustic.py", "tests/test_contract.py")
+    }
+
+    "moshi-serve" {
+        # Just the Candle server -- moshi-bench manages its own relay
+        # subprocess per iteration (see ml/moshi/bench_moshi_latency.py), and
+        # for interactive/manual testing the relay is a separate foreground
+        # process anyway (`backend\.venv\Scripts\python.exe ml\moshi\relay.py`)
+        # since it segfaults on connection teardown and needs restarting
+        # between sessions (see docs/M1_BRINGUP_LOG.md, Task 6 findings). So
+        # this target's only job is: bring up the Candle server on 8999 and
+        # confirm it's listening.
+        Write-Host "candle server https://localhost:8999 (internal, Kyutai's real protocol)"
+        Write-Host "relay is NOT started here -- moshi-bench starts its own; for manual"
+        Write-Host "testing run: backend\.venv\Scripts\python.exe ml\moshi\relay.py"
+        $rustDir = Join-Path $Repo "ml\moshi\candle-moshi\rust"
+        $exe = Join-Path $rustDir "target\release\moshi-backend.exe"
+        if (-not (Test-Path $exe)) { throw "moshi-backend.exe not found -- build it first (see docs/M1_BRINGUP_LOG.md)" }
+        foreach ($pem in "key.pem", "cert.pem") {
+            if (-not (Test-Path (Join-Path $rustDir $pem))) {
+                throw "$pem missing in $rustDir -- generate the TLS cert first (see docs/M1_BRINGUP_LOG.md)"
+            }
+        }
+        $env:CUDA_COMPUTE_CAP = "120"
+        Push-Location $rustDir
+        try {
+            & $exe --config "moshi-backend/config-q8.json" standalone
+        } finally {
+            Pop-Location
+        }
+    }
+
+    "moshi-bench" {
+        Invoke-Backend @("..\ml\moshi\bench_moshi_latency.py", "scripts\words\dysfluent_utterance.wav", "10")
     }
 
     "clean" {
