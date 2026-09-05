@@ -303,13 +303,37 @@ EOF
 
 ## Task 2: Decoder — chunked Ogg/Opus to PCM via PyAV, with resampling
 
+**Revision note (2026-09-05):** the first version of this task specified a
+synchronous `feed(chunk: bytes) -> bytes` decoder that reopens no state and
+resumes one `container.demux(stream)` generator across calls. Implementation
+found and this session independently confirmed that PyAV 18.1.0's Ogg
+demuxer **permanently latches EOF** the first time its reader's `readinto`
+returns 0 (its way of saying "no bytes available *right now*") — it does
+not distinguish that from real end-of-stream, so a `feed()` that appends
+bytes after the demuxer has already seen one empty `readinto` call produces
+zero further packets forever, even with valid unread bytes sitting in the
+buffer. Verified directly: a container opened on a partial buffer, demuxed
+to exhaustion, then fed the rest of a 9964-byte Ogg stream on the same
+container/stream objects — the second `demux()` call yields nothing.
+
+The fix (verified by spike, 999ms decoded from 1000ms of encoded audio
+through irregular chunking with real inter-call delays) is what the design
+spec's Architecture section already called for and this task's original
+version skipped: run `av.open()` and the demux loop **once**, on a
+**blocking** reader, in a dedicated thread — `readinto` blocks on a queue
+until bytes arrive rather than ever returning 0 for "nothing yet," so the
+demuxer never sees a false EOF. This changes the class's public interface
+from synchronous `feed() -> bytes` to `feed() -> None` (push bytes into the
+worker) plus a separate `poll() -> bytes` (drain whatever's been decoded so
+far) — the shape below is what actually ships.
+
 **Files:**
 - Modify: `ml/moshi/bridge.py` (add decoder)
 - Test: `ml/moshi/tests/test_bridge_codec.py`
 
 **Interfaces:**
 - Consumes: nothing from Task 1 directly (independent codec direction), but shares `SAMPLE_RATE`/`CHANNELS`/`FRAME_SAMPLES` constants already defined in `bridge.py`.
-- Produces: `class OpusOggDecoder` with `__init__(self, sample_rate: int = 24_000, channels: int = 1) -> None`, `def feed(self, chunk: bytes) -> bytes` (accepts arbitrarily-chunked Ogg/Opus bytes, returns any complete 16-bit PCM decoded so far, resampled to `sample_rate`), `def close(self) -> None`.
+- Produces: `class OpusOggDecoder` with `__init__(self, sample_rate: int = 24_000, channels: int = 1) -> None` (starts a worker thread), `def feed(self, chunk: bytes) -> None` (pushes raw Ogg/Opus bytes to the worker; non-blocking), `def poll(self, timeout: float = 0.05) -> bytes` (drains whatever 16-bit PCM has been decoded so far, resampled to `sample_rate`; blocks up to `timeout` waiting for at least the first item, then returns immediately with whatever else is already queued), `def close(self) -> None` (signals real EOF and joins the worker thread).
 
 - [ ] **Step 1: Write the failing test — round trip through encoder+decoder preserves duration**
 
@@ -330,15 +354,22 @@ def test_encode_decode_round_trip_preserves_duration() -> None:
     pcm = bytearray()
     # Feed back in irregular chunk sizes -- not aligned to Ogg pages or
     # plausible websocket message sizes -- to prove chunking doesn't matter.
+    # A small sleep between feeds matters here: it lets the decoder's worker
+    # thread actually catch up to (and briefly exhaust) the buffered bytes
+    # between calls, which is exactly the scenario that broke the
+    # synchronous single-container design (see this task's Revision note).
     i = 0
     sizes = [137, 1024, 64, 900, 2048, 300]
     k = 0
     while i < len(ogg_bytes):
         n = sizes[k % len(sizes)]
-        pcm += dec.feed(bytes(ogg_bytes[i : i + n]))
+        dec.feed(bytes(ogg_bytes[i : i + n]))
+        pcm += dec.poll(timeout=0.01)
         i += n
         k += 1
+        time.sleep(0.003)
     dec.close()
+    pcm += dec.poll(timeout=1.0)
 
     duration_ms = len(pcm) / 2 / SAMPLE_RATE * 1000
     assert 900 <= duration_ms <= 1100, f"expected ~1000ms, got {duration_ms:.0f}ms"
@@ -357,10 +388,13 @@ def test_decoder_handles_arbitrary_chunk_boundaries() -> None:
     total_pcm = bytearray()
     # Single-byte feeds: the most adversarial chunking possible.
     for b in ogg_bytes:
-        total_pcm += dec.feed(bytes([b]))
+        dec.feed(bytes([b]))
     dec.close()
+    total_pcm += dec.poll(timeout=1.0)
     assert len(total_pcm) > 0
 ```
+
+Add `import time` to the top of `ml/moshi/tests/test_bridge_codec.py` alongside its existing imports (`math`, `struct`) if not already present.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -369,92 +403,131 @@ Expected: the two new tests FAIL with `ImportError` or `AttributeError: module '
 
 - [ ] **Step 3: Write the decoder implementation**
 
-Append to `ml/moshi/bridge.py`:
+Append to `ml/moshi/bridge.py`. Add `import queue` and `import threading` to the file's imports alongside the existing `fractions`/`io`/`logging` if not already present, and `from av.audio.resampler import AudioResampler` alongside the existing `import av`:
 
 ```python
 class OpusOggDecoder:
     """Decodes a continuous, arbitrarily-chunked Ogg/Opus byte stream into PCM.
 
-    Call `feed(chunk)` with whatever bytes arrived in one websocket message;
-    it returns all raw 16-bit PCM decoded from any complete audio packets
-    found so far, resampled to `sample_rate` (Opus decodes at a fixed 48kHz
-    internally regardless of the stream's negotiated rate -- see design
-    spec finding 2).
+    Runs its own `av.open()` + demux loop once, on a dedicated thread, over a
+    BLOCKING reader whose `readinto` waits on a queue for the next chunk
+    instead of ever returning 0 for "nothing available yet." This is
+    required, not a style choice: PyAV 18.1.0's Ogg demuxer treats a
+    `readinto` returning 0 as permanent end-of-stream, so a synchronous
+    feed()-returns-bytes design that lets the reader signal "nothing right
+    now" via a 0 return breaks the first time the worker catches up to the
+    buffered bytes -- confirmed by spike during this task's implementation
+    (see this task's Revision note above). A blocking reader in its own
+    thread sidesteps the issue entirely: the demuxer's `readinto` call
+    simply blocks until real bytes (or close()'s EOF sentinel) arrive.
+
+    Call `feed(chunk)` with whatever bytes arrived in one websocket message
+    to push them to the worker (non-blocking). Call `poll()` to drain
+    whatever 16-bit PCM has been decoded so far, resampled to `sample_rate`
+    (Opus decodes at a fixed 48kHz internally regardless of the stream's
+    negotiated rate -- see design spec finding 2). Call `close()` once no
+    more input is coming, to signal real EOF and join the worker thread.
     """
 
     def __init__(self, sample_rate: int = SAMPLE_RATE, channels: int = CHANNELS) -> None:
         self.sample_rate = sample_rate
         self.channels = channels
-        self._buf = bytearray()
-        self._pos = 0
-        self._container: av.container.InputContainer | None = None
-        self._stream = None
+        self._in_q: queue.Queue[bytes | None] = queue.Queue()
+        self._out_q: queue.Queue[tuple[str, object]] = queue.Queue()
         self._resampler = AudioResampler(
             format="s16", layout="mono" if channels == 1 else "stereo", rate=sample_rate
         )
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
 
-    def _reader(self) -> io.RawIOBase:
-        decoder = self
+    class _BlockingReader(io.RawIOBase):
+        """readinto() blocks on the queue; only returns 0 for real EOF."""
 
-        class _Reader(io.RawIOBase):
-            def readable(self) -> bool:
-                return True
+        def __init__(self, in_q: "queue.Queue[bytes | None]") -> None:
+            self._q = in_q
+            self._buf = b""
+            self._eof = False
 
-            def readinto(self, dst: bytearray) -> int:
-                available = len(decoder._buf) - decoder._pos
-                if available <= 0:
+        def readable(self) -> bool:
+            return True
+
+        def readinto(self, dst: bytearray) -> int:
+            while not self._buf:
+                if self._eof:
                     return 0
-                n = min(len(dst), available)
-                dst[:n] = decoder._buf[decoder._pos : decoder._pos + n]
-                decoder._pos += n
-                return n
+                item = self._q.get()  # blocks until feed() or close() posts
+                if item is None:
+                    self._eof = True
+                    return 0
+                self._buf = item
+            n = min(len(dst), len(self._buf))
+            dst[:n] = self._buf[:n]
+            self._buf = self._buf[n:]
+            return n
 
-        return _Reader()
-
-    def feed(self, chunk: bytes) -> bytes:
-        if not chunk:
-            return b""
-        self._buf += chunk
-
-        if self._container is None:
-            # Ogg's identification header must be present before av.open
-            # can probe the container; if there isn't enough buffered yet,
-            # wait for more bytes on the next feed() call.
-            try:
-                self._container = av.open(self._reader(), mode="r", format="ogg")
-                self._stream = self._container.streams.audio[0]
-            except (av.error.EOFError, ValueError):
-                self._container = None
-                return b""
-
-        pcm_out = bytearray()
+    def _run(self) -> None:
+        reader = self._BlockingReader(self._in_q)
         try:
-            for packet in self._container.demux(self._stream):
+            container = av.open(reader, mode="r", format="ogg")
+        except Exception as exc:
+            self._out_q.put(("error", exc))
+            return
+        stream = container.streams.audio[0]
+        try:
+            for packet in container.demux(stream):
                 for frame in packet.decode():
                     for out_frame in self._resampler.resample(frame):
-                        pcm_out += bytes(out_frame.planes[0])[
+                        pcm = bytes(out_frame.planes[0])[
                             : out_frame.samples * 2 * self.channels
                         ]
+                        self._out_q.put(("pcm", pcm))
         except av.error.EOFError:
             pass
+        except Exception as exc:
+            self._out_q.put(("error", exc))
+        container.close()
+        self._out_q.put(("done", None))
 
-        # Compact consumed bytes so _buf doesn't grow unboundedly.
-        del self._buf[: self._pos]
-        self._pos = 0
-        return bytes(pcm_out)
+    def feed(self, chunk: bytes) -> None:
+        if chunk:
+            self._in_q.put(chunk)
+
+    def poll(self, timeout: float = 0.05) -> bytes:
+        """Drain whatever PCM has been decoded so far.
+
+        Blocks up to `timeout` waiting for at least one item, then drains
+        anything else already queued without waiting further.
+        """
+        out = bytearray()
+        try:
+            kind, payload = self._out_q.get(timeout=timeout)
+            if kind == "pcm":
+                out += payload  # type: ignore[arg-type]
+            elif kind == "error":
+                raise payload  # type: ignore[misc]
+            # "done": nothing to add, just stop waiting for more.
+        except queue.Empty:
+            return b""
+        while True:
+            try:
+                kind, payload = self._out_q.get_nowait()
+            except queue.Empty:
+                break
+            if kind == "pcm":
+                out += payload  # type: ignore[arg-type]
+            elif kind == "error":
+                raise payload  # type: ignore[misc]
+        return bytes(out)
 
     def close(self) -> None:
-        if self._resampler is not None:
-            for out_frame in self._resampler.resample(None):
-                pass  # drain; nothing queued after a stream ends mid-utterance
-        if self._container is not None:
-            self._container.close()
+        self._in_q.put(None)
+        self._thread.join(timeout=5)
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `cd "c:/Courses/WE Advanced AI/Final Project/we-s2s-finalproject" && backend/.venv/Scripts/python.exe -m pytest ml/moshi/tests/test_bridge_codec.py -v`
-Expected: all tests `PASSED`. If `test_decoder_handles_arbitrary_chunk_boundaries` fails with a probe error on very small initial feeds, that is expected transiently — the assertion only checks `len(total_pcm) > 0` after all bytes are fed, not after each single-byte feed.
+Expected: all tests `PASSED`.
 
 - [ ] **Step 5: Commit**
 
@@ -464,11 +537,15 @@ git add ml/moshi/bridge.py ml/moshi/tests/test_bridge_codec.py
 git commit -m "$(cat <<'EOF'
 feat(m2): add PyAV-backed Ogg/Opus decoder with 24kHz resampling
 
-Opus always decodes at 48kHz internally regardless of the encoded
-stream's rate -- a spike during design found this produces silently
-2x-wrong PCM duration without an explicit AudioResampler step. Also
-verified against single-byte-chunked input, the adversarial case that
-triggered relay.py's ctypes segfault/crash bugs.
+Runs the demux loop on a dedicated thread over a blocking reader,
+not a synchronous feed()-returns-bytes design: PyAV 18.1.0's Ogg
+demuxer permanently latches EOF the first time its reader returns 0,
+so a reader that ever signals "nothing right now" that way breaks
+after the first catch-up. A blocking reader avoids the false EOF
+entirely. Also verified against single-byte-chunked input, the
+adversarial case that triggered relay.py's ctypes segfault/crash
+bugs, and confirms Opus's fixed 48kHz internal decode rate is
+correctly resampled back to 24kHz.
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 EOF
@@ -484,7 +561,7 @@ EOF
 - Test: `ml/moshi/tests/test_bridge_protocol.py` (new)
 
 **Interfaces:**
-- Consumes: `OpusOggEncoder` (Task 1) and `OpusOggDecoder` (Task 2) exactly as defined above.
+- Consumes: `OpusOggEncoder` (Task 1) and `OpusOggDecoder` (Task 2) exactly as defined above — note Task 2's `OpusOggDecoder` interface is `feed(chunk: bytes) -> None` (push only) plus a separate `poll(timeout: float = 0.05) -> bytes` (drain decoded PCM), not a single `feed() -> bytes` call; `bridge_upstream_to_client` below calls both.
 - Produces: `async def bridge_upstream_to_client(upstream, client) -> None`, `async def bridge_client_to_upstream(client, upstream) -> None`, `async def handler(client) -> None`, `async def main() -> None`.
 
 - [ ] **Step 1: Write the failing tests — tag translation and ERROR path against fake websockets**
@@ -605,6 +682,7 @@ Append to `ml/moshi/bridge.py`:
 
 ```python
 import asyncio
+import contextlib
 import ssl
 
 import websockets
@@ -613,36 +691,68 @@ import websockets
 async def bridge_upstream_to_client(upstream, client) -> None:
     """Translate Candle's real protocol into ours, one direction.
 
+    OpusOggDecoder decodes on its own worker thread (see Task 2's Revision
+    note -- required by a real PyAV EOF-latching limitation, not a style
+    choice), so this coroutine calls `decoder.poll()` via `asyncio.to_thread`
+    to drain decoded PCM without blocking the event loop while `poll()`
+    waits on its internal queue.
+
     Any failure reading from upstream -- a decode error, or the connection
     itself dying uncleanly -- is reported to the client as an OUR_ERROR
     frame before this coroutine returns, rather than the client just seeing
     an abrupt close (the relay's third known gap).
     """
     decoder = OpusOggDecoder()
-    try:
+
+    async def drain_decoded() -> None:
+        """Forward decoded PCM to the client until cancelled.
+
+        Runs as a concurrent task alongside receive_upstream() below, since
+        PCM can finish decoding well after the last KT_AUDIO frame was fed
+        to the (already-buffering) worker thread -- see the closing
+        sequence below for why decoder.close() must complete before this
+        task is cancelled.
+        """
+        while True:
+            pcm = await asyncio.to_thread(decoder.poll, 0.05)
+            if pcm:
+                await client.send(bytes([OUR_AUDIO]) + pcm)
+
+    async def receive_upstream() -> None:
         async for frame in upstream:
             if not frame:
                 continue
             tag, payload = frame[0], frame[1:]
             log.debug("upstream->client: tag=%s payload_len=%d", tag, len(payload))
             if tag == KT_AUDIO:
-                pcm = decoder.feed(payload)
-                if pcm:
-                    await client.send(bytes([OUR_AUDIO]) + pcm)
+                decoder.feed(payload)
             elif tag == KT_TEXT:
                 await client.send(bytes([OUR_TEXT]) + payload)
             elif tag == KT_ERROR:
                 await client.send(bytes([OUR_ERROR]) + payload)
             # KT_HANDSHAKE, KT_CONTROL, KT_METADATA, KT_PING: no equivalent
             # our client models: drop rather than guess at a mapping.
+
+    try:
+        drain_task = asyncio.create_task(drain_decoded())
+        try:
+            await receive_upstream()
+        finally:
+            # Signal real EOF and let the worker thread finish emitting any
+            # PCM still in flight BEFORE cancelling the drain task -- verified
+            # by spike that cancelling immediately drops 100% of a short
+            # real-audio test case's output, since decode can finish shortly
+            # after the last KT_AUDIO frame is fed.
+            await asyncio.to_thread(decoder.close)
+            drain_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await drain_task
     except Exception as exc:
         detail = f"{type(exc).__name__}: {exc}".encode("utf-8", errors="replace")
         try:
             await client.send(bytes([OUR_ERROR]) + detail)
         except Exception:
             pass  # client already gone; nothing more to do
-    finally:
-        decoder.close()
 
 
 async def bridge_client_to_upstream(client, upstream) -> None:
