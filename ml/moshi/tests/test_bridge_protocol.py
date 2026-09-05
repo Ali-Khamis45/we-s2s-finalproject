@@ -4,9 +4,11 @@ doubles. No GPU or Candle server needed."""
 from __future__ import annotations
 
 import asyncio
+import threading
 
 import pytest
 
+import ml.moshi.bridge as bridge_mod
 from ml.moshi.bridge import (
     KT_AUDIO,
     KT_ERROR,
@@ -123,6 +125,101 @@ async def test_cancellation_during_incomplete_stream_is_not_swallowed() -> None:
     assert not any(
         frame and frame[0] == OUR_ERROR for frame in client.sent
     ), "cancellation must not produce a spurious OUR_ERROR frame"
+
+
+@pytest.mark.asyncio
+async def test_decode_error_on_normal_end_is_not_swallowed(monkeypatch) -> None:
+    """Regression test for the fix in this task: a3aef6c's unconditional
+    `contextlib.suppress(BaseException)` around `await drain_task` fixed
+    cancellation but also silently swallowed genuine decode errors on the
+    completely normal, non-cancelled path -- independently measured 8/10 ->
+    0/10 OUR_ERROR frames for a corrupt stream that ends without any
+    cancellation. That directly undoes one of the three things this module
+    exists to fix over relay.py (surfacing real failures as OUR_ERROR
+    instead of hiding them).
+
+    Why this needs a controlled fake decoder rather than the real
+    OpusOggDecoder: `decoder.close()` and `decoder.poll()` both run via
+    `asyncio.to_thread`, and cancelling a task while it's suspended awaiting
+    an in-flight `asyncio.to_thread` call delivers CancelledError to that
+    task IMMEDIATELY -- it does not wait for the underlying thread-pool call
+    to finish, no matter how close that call is to completing. With the
+    real decoder, whether drain_task's current poll() call has already
+    raised (so `await drain_task` sees the real error) or is still in
+    flight (so `await drain_task` sees CancelledError instead, losing the
+    error) depends on real OS thread-pool scheduling against
+    bridge_upstream_to_client's finally block -- measured flaky across
+    several designs (fixed sleeps, wait-until-idle-then-signal, stashing
+    the error to replay synchronously).
+
+    Instead, this test patches `bridge.OpusOggDecoder` with a fake whose
+    poll() blocks on a threading.Event (`release_poll`) until the test sets
+    it, then raises a fixed error -- run via the same asyncio.to_thread the
+    real code uses, so the finally block's actual cancellation logic is
+    exercised for real, but the *timing* of when the executor thread
+    finishes is under this test's control instead of the real decoder's.
+    The sequence: let drain_task start and block inside its first poll()
+    call (a real await point, not a sleep-based guess); set `release_poll`
+    so that thread call proceeds to raise; then give the executor thread a
+    brief real interval to run and marshal that exception back into the
+    event loop via `asyncio.to_thread`'s internal callback -- confirmed
+    reliable (100/100 in isolation) because setting the event and calling
+    cancel() are ordered by an explicit intervening sleep, not left to
+    chance. Only then does receive_upstream() return, triggering
+    bridge_upstream_to_client's finally block, `decoder.close()` (a no-op
+    for the fake), and `drain_task.cancel()` -- landing on a task whose
+    to_thread future has already completed with the real decode error, so
+    cancel() is a no-op and `await drain_task` re-raises that error."""
+
+    class DecodeBoom(Exception):
+        pass
+
+    release_poll = threading.Event()
+    poll_started = threading.Event()
+
+    class FakeDecoder:
+        def feed(self, chunk: bytes) -> None:
+            pass
+
+        def poll(self, timeout: float = 0.05) -> bytes:
+            poll_started.set()
+            release_poll.wait(5)
+            raise DecodeBoom("simulated decode failure, no cancellation involved")
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(bridge_mod, "OpusOggDecoder", FakeDecoder)
+
+    class EndsNormallySocket:
+        """Yields one incomplete-Ogg KT_AUDIO frame, then waits for
+        drain_task's poll() call to actually raise before ending the
+        stream normally (no exception, no cancellation in this test)."""
+
+        def __aiter__(self):
+            return self._gen()
+
+        async def _gen(self):
+            yield bytes([KT_AUDIO]) + b"OggS\x00\x02\x00\x00"
+            # Wait for drain_task's task to actually reach its blocking
+            # poll() call (a real await point -- not a guess) ...
+            await asyncio.to_thread(poll_started.wait, 5)
+            # ... then let that call raise ...
+            release_poll.set()
+            # ... and give its executor thread a moment to actually finish
+            # and marshal the exception back into drain_task before this
+            # generator returns and bridge_upstream_to_client's finally
+            # block calls drain_task.cancel() -- see docstring above.
+            await asyncio.sleep(0.05)
+
+    upstream = EndsNormallySocket()
+    client = FakeSocket([])
+
+    await bridge_upstream_to_client(upstream, client)
+
+    assert any(
+        frame and frame[0] == OUR_ERROR for frame in client.sent
+    ), "a genuine decode error on the normal (non-cancelled) path must reach the client as OUR_ERROR"
 
 
 @pytest.mark.asyncio

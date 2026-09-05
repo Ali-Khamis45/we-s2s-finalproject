@@ -16,12 +16,12 @@ spike that fixed the config values used below.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import fractions
 import io
 import logging
 import queue
 import ssl
+import sys
 import threading
 
 import av
@@ -323,17 +323,30 @@ async def bridge_upstream_to_client(upstream, client) -> None:
             # after the last KT_AUDIO frame is fed.
             await asyncio.to_thread(decoder.close)
             drain_task.cancel()
-            # Suppress EVERYTHING here, not just CancelledError: drain_task
-            # can be mid-poll() when cancelled, and poll() re-raises any
-            # queued decode error (e.g. an Ogg stream that received some
-            # bytes but never completed its probe before this coroutine was
-            # torn down). That error must never replace or mask whatever
-            # actually triggered this teardown -- a real CancelledError
-            # propagating through receive_upstream() above, or a normal
-            # return. drain_task's only job during teardown is "stop
-            # quickly"; nothing it raises here is actionable.
-            with contextlib.suppress(BaseException):
+            # drain_task can be mid-poll() when cancelled, and poll() re-raises
+            # any queued decode error (e.g. an Ogg stream that received some
+            # bytes but never completed its probe). What we do with that error
+            # depends on why this finally block is running:
+            #   - If receive_upstream() above is already propagating a
+            #     CancelledError (the normal shutdown path -- e.g. the other
+            #     bridge direction finished first and handler() cancelled us),
+            #     that decode error is not actionable and must not replace the
+            #     real CancelledError -- discard it.
+            #   - If nothing is propagating (receive_upstream() returned
+            #     normally), a real decode error from drain_task IS actionable
+            #     and must reach the client as OUR_ERROR -- this is one of the
+            #     three things this module exists to fix over relay.py, and an
+            #     earlier fix attempt broke it by suppressing unconditionally.
+            cancelling = sys.exc_info()[0] is not None and issubclass(
+                sys.exc_info()[0], asyncio.CancelledError
+            )
+            try:
                 await drain_task
+            except asyncio.CancelledError:
+                pass  # drain_task's own cancellation is always expected here
+            except Exception:
+                if not cancelling:
+                    raise
     except asyncio.CancelledError:
         raise  # never translate a cancel into an ERROR frame
     except Exception as exc:
