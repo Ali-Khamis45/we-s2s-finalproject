@@ -20,7 +20,6 @@ import io
 import logging
 
 import av
-from av.audio.resampler import AudioResampler
 
 log = logging.getLogger("moshi.bridge")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -61,11 +60,6 @@ class _ByteSink(io.RawIOBase):
         out = b"".join(self._chunks)
         self._chunks.clear()
         return out
-
-
-class OpusOggDecoder:
-    """Placeholder decoder for future implementation."""
-    pass
 
 
 class OpusOggEncoder:

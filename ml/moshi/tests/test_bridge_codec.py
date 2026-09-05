@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 import struct
 
-from ml.moshi.bridge import OpusOggEncoder, OpusOggDecoder
+from ml.moshi.bridge import OpusOggEncoder
 
 SAMPLE_RATE = 24_000
 FRAME_MS = 40
