@@ -76,6 +76,16 @@ both tied to this specific bring-up rather than to Moshi's architecture:
    Moshi/Candle-server-side, and should re-run this same benchmark once it
    lands for a cleaner number.
 
+**Confirmation re-run, same day, after auditability fixes to the benchmark
+script** (attempt-count logging, a real websocket readiness probe replacing
+the fixed 1s sleep, and clarified WAV-fixture-is-duration-only comments —
+see `.superpowers/sdd/task-6-report.md`'s addendum): `p50=1600.8ms
+p95=1775.9ms n=10`, all 11 iterations (warm-up + 10 measured) succeeded on
+attempt 1 — zero retries, now visible directly in the script's own output
+rather than only asserted in this log. Within normal run-to-run variance of
+the original measurement above; figures above left as-is since the
+difference isn't meaningful.
+
 See `.superpowers/sdd/task-6-report.md` for the full account of what else
 this task found while getting to a working, repeatable measurement
 (a chunk-size bug and a content-dependent encoder crash in the relay, both
@@ -193,10 +203,14 @@ as throwaway, not production):
    `Segmentation fault` from the shell, zero Python traceback — a native
    crash, not a Python exception) shortly after a client connection closes.
    Worked around by having the benchmark treat the relay as fully disposable:
-   restart it fresh before every iteration, confirm the port is listening via
-   a bare TCP connect (deliberately not a full `moshi_client.available()`
-   protocol probe, to avoid touching the Candle server before the measured
-   session), then run one iteration.
+   restart it fresh before every iteration, confirm it is truly ready via
+   `moshi_client.available(force=True)` (a real websocket handshake through
+   the relay to the Candle server, then closed — the same probe production
+   code uses), then run one iteration. (An earlier draft of the benchmark
+   used a bare TCP connect plus a fixed 1s sleep instead; that was a guess
+   about relay startup time that a code review correctly flagged as unable
+   to detect a relay that's slow to finish its own setup under load — fixed
+   to probe real readiness instead, see `.superpowers/sdd/task-6-report.md`.)
 2. Streaming the fixture's real (non-silent) synthesized-speech PCM through
    the relay made the *client*'s connection die within milliseconds, every
    time — confirmed the relay process itself and the Candle server both

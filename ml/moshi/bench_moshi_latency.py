@@ -59,7 +59,6 @@ Usage: python ml/moshi/bench_moshi_latency.py <wav_path> <N>
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import statistics
 import subprocess
 import sys
@@ -100,7 +99,18 @@ def report(name: str, samples: list[float], unit: str = "ms") -> None:
     print(f"{name}: p50={p50:.1f}{unit} p95={p95:.1f}{unit} n={len(samples)}")
 
 
-def wav_duration_s(wav_path: str) -> float:
+def wav_duration_s_only(wav_path: str) -> float:
+    """Return the fixture's duration in seconds -- nothing else.
+
+    NOTE: this only reads the WAV header to determine *how long* to stream.
+    The format assertions below (sample rate/channels/width) exist so that
+    duration arithmetic is correct for this file, not to validate that the
+    fixture's audio *content* is usable -- it isn't used at all. See
+    `silence_chunks()` and the module docstring, finding 3: the relay's Opus
+    encoder crashes on real speech content, so this script streams
+    synthesized silence sized to this duration instead of the fixture's own
+    decoded PCM.
+    """
     with wave.open(wav_path, "rb") as wf:
         assert wf.getframerate() == 24_000, "expects 24kHz PCM to match moshi_sample_rate"
         assert wf.getnchannels() == 1, "expects mono PCM"
@@ -111,8 +121,14 @@ def wav_duration_s(wav_path: str) -> float:
 def silence_chunks(duration_s: float, sample_rate: int, chunk_ms: int) -> list[bytes]:
     """Build a list of fixed-size all-zero 16-bit mono PCM chunks.
 
-    See module docstring, finding 3, for why silence rather than the
-    fixture's decoded speech is streamed.
+    This is silence, not the WAV fixture's decoded audio -- `duration_s`
+    (from `wav_duration_s_only`) is the *only* thing taken from the fixture.
+    Its actual audio content is never read or streamed: the relay's Opus
+    encoder reliably crashes the client's connection on real speech PCM but
+    not on silence (see module docstring, finding 3, for the full
+    investigation). So the fixture's format assertions in
+    `wav_duration_s_only` establish nothing about content validity -- they
+    only make the duration arithmetic correct.
     """
     bytes_per_ms = sample_rate * 2 // 1000
     chunk_bytes = bytes_per_ms * chunk_ms
@@ -157,27 +173,37 @@ class RelayHandle:
             self._log = None
 
     async def wait_ready(self, timeout_s: float = 10.0) -> None:
-        """Poll until the relay's listening port accepts a bare TCP connect.
+        """Poll until the relay is actually ready to carry a session, not
+        just until its TCP port is open.
 
-        Deliberately NOT `moshi_client.available()`: that probe opens a real
-        websocket handshake through the relay to the Candle server. A bare
-        TCP connect confirms the relay process itself is up and listening
-        without exercising the upstream protocol at all.
+        A bare TCP connect only confirms the relay process has bound its
+        listening socket -- it says nothing about whether the relay's own
+        `asyncio.start_server` setup, or its upstream connection to the
+        Candle server, has finished. Under GPU memory pressure that setup
+        could plausibly take longer than a fixed guess, and streaming
+        against a not-fully-ready relay would look identical to "Moshi being
+        slow" in the measured numbers.
+
+        So this reuses the real client's own readiness probe,
+        `moshi_client.available(force=True)` (backend/app/services/moshi.py):
+        it opens a real websocket handshake through the relay to the Candle
+        server and closes it, which is the same probe production code relies
+        on to decide the service is up. `force=True` bypasses the client's
+        normal probe-result cache so every call here actually re-probes.
+        Retried with a short backoff until `timeout_s` elapses.
         """
+        moshi_client.invalidate()
         deadline = time.perf_counter() + timeout_s
+        last_exc: Exception | None = None
         while time.perf_counter() < deadline:
             try:
-                _, writer = await asyncio.open_connection("127.0.0.1", 8998)
-                writer.close()
-                with contextlib.suppress(Exception):
-                    await writer.wait_closed()
-                # Give the relay a moment past "port open" to finish its own
-                # asyncio.start_server setup before the first real session.
-                await asyncio.sleep(1.0)
-                return
-            except OSError:
-                await asyncio.sleep(0.3)
-        raise RuntimeError("relay did not become ready in time")
+                if await moshi_client.available(force=True):
+                    return
+            except Exception as exc:  # pragma: no cover - defensive
+                last_exc = exc
+            await asyncio.sleep(0.3)
+        suffix = f": {last_exc}" if last_exc else ""
+        raise RuntimeError(f"relay did not become ready in time{suffix}")
 
 
 async def one_run(chunks: list[bytes]) -> float | None:
@@ -221,8 +247,16 @@ async def one_run(chunks: list[bytes]) -> float | None:
     return result.get("ms")
 
 
-async def run_iteration(chunks: list[bytes], relay: RelayHandle | None) -> float:
-    """One measured iteration, with retries on relay flakiness."""
+async def run_iteration(chunks: list[bytes], relay: RelayHandle | None) -> tuple[float, int]:
+    """One measured iteration, with retries on relay flakiness.
+
+    Returns (elapsed_ms, attempts) so the caller can print and record how
+    many attempts each iteration actually took. Zero-retries claims should be
+    verifiable from this output, not asserted from memory: an iteration that
+    needed more than one attempt paid extra relay-startup cost on the
+    attempt(s) that failed before the one that succeeded, which is a
+    legitimate data-quality question for whoever reads the reported numbers.
+    """
     for attempt in range(1, MAX_RETRIES + 1):
         if relay is not None:
             relay.restart()
@@ -240,18 +274,18 @@ async def run_iteration(chunks: list[bytes], relay: RelayHandle | None) -> float
 
         elapsed = await one_run(chunks)
         if elapsed is not None:
-            return elapsed
+            return elapsed, attempt
         print(f"  attempt {attempt}: no audio event within {RUN_TIMEOUT_S:.0f}s, retrying")
 
     raise RuntimeError(f"iteration failed after {MAX_RETRIES} attempts")
 
 
 async def main(wav_path: str, n: int) -> None:
-    duration_s = wav_duration_s(wav_path)
+    duration_s = wav_duration_s_only(wav_path)
     chunks = silence_chunks(duration_s, 24_000, CHUNK_MS)
-    print(f"fixture {wav_path}: {duration_s:.2f}s -> streaming {len(chunks)} x {CHUNK_MS}ms silence "
-          f"chunks (see module docstring, finding 3, for why silence rather than the fixture's own "
-          f"decoded PCM is streamed)")
+    print(f"fixture {wav_path}: {duration_s:.2f}s duration (content unused) -> streaming "
+          f"{len(chunks)} x {CHUNK_MS}ms silence chunks (see module docstring, finding 3, for why "
+          f"silence rather than the fixture's own decoded PCM is streamed)")
 
     relay = RelayHandle() if RELAY_MANAGED else None
     if relay is None:
@@ -259,21 +293,42 @@ async def main(wav_path: str, n: int) -> None:
         if not ok:
             raise SystemExit("Moshi server not reachable at settings.moshi_url")
 
-    failures = 0
+    def log_attempts(label: str, attempts: int) -> None:
+        if attempts > 1:
+            print(f"  {label}: needed {attempts} attempts (RETRIED -- "
+                  f"{attempts - 1} attempt(s) paid extra relay-startup cost before the one "
+                  f"that succeeded; see this iteration's own retry lines above)")
+
     try:
         # Warm run, excluded from the reported samples.
         print("warm-up run...")
-        warm = await run_iteration(chunks, relay)
-        print(f"  warm-up: {warm:.1f}ms (excluded from stats)")
+        warm, warm_attempts = await run_iteration(chunks, relay)
+        print(f"  warm-up: {warm:.1f}ms (excluded from stats), attempts={warm_attempts}")
+        log_attempts("warm-up", warm_attempts)
 
         samples = []
+        attempt_counts = []
         for i in range(n):
-            elapsed = await run_iteration(chunks, relay)
+            elapsed, attempts = await run_iteration(chunks, relay)
             samples.append(elapsed)
-            print(f"  iteration {i + 1}/{n}: {elapsed:.1f}ms")
+            attempt_counts.append(attempts)
+            print(f"  iteration {i + 1}/{n}: {elapsed:.1f}ms, attempts={attempts}")
+            log_attempts(f"iteration {i + 1}/{n}", attempts)
 
         print()
         report("time to first audio", samples)
+        total_attempts = warm_attempts + sum(attempt_counts)
+        retried = [i + 1 for i, a in enumerate(attempt_counts) if a > 1]
+        if not retried and warm_attempts == 1:
+            summary = "zero retries needed (warm-up + all measured iterations succeeded on attempt 1)"
+        else:
+            parts = []
+            if warm_attempts > 1:
+                parts.append(f"warm-up ({warm_attempts} attempts)")
+            if retried:
+                parts.append(f"measured iteration(s) {retried}")
+            summary = f"RETRIED: {', '.join(parts)} needed more than one attempt"
+        print(f"attempts: {total_attempts} total across {n + 1} iterations (warm-up + {n} measured); {summary}")
 
         print()
         print("READ THIS BEFORE QUOTING THE NUMBERS")
