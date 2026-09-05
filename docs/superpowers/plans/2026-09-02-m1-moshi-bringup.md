@@ -1,5 +1,7 @@
 # M1: Moshi on RTX 5050 — Bring-Up Implementation Plan
 
+> **STATUS: ✅ COMPLETE (2026-09-05).** All 7 tasks implemented and reviewed clean (Task 6 needed one fix-and-re-review cycle; all others passed first review), plus a final whole-branch review (one round of doc fixes applied after). See `docs/M1_BRINGUP_LOG.md` for the full record and `docs/PROJECT_PLAN.md`'s M2 entry for the handoff to the next task. This file is kept as historical record of what was actually built (several sections were corrected in place as real facts emerged during execution — read the "Confirmed protocol mismatch" note and each task's "COMPLETE" annotation for what changed and why).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. This plan is hardware bring-up, not TDD application code — "tests" here are verification commands against real hardware/model output, not unit tests.
 
 **Goal:** Get quantized Moshi running locally on the RTX 5050 (Blackwell, sm_120, 8GB VRAM), serving audio in/out plus the Inner Monologue text stream over the exact WebSocket wire protocol `backend/app/services/moshi.py` already expects, with measured p50/p95 time-to-first-audio latency recorded for the M12 comparison.

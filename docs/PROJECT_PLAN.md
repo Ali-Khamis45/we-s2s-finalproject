@@ -46,6 +46,21 @@ Expect **seconds**, not one second.
 This does not weaken the thesis — it widens the gap against Moshi's ~200 ms, which is
 precisely what M12 exists to measure. Quote measurements, never the estimate.
 
+**Update after M1 (2026-09-05):** Moshi's own measured time-to-first-audio on
+this hardware is **p50 ≈ 1.6 s, p95 ≈ 1.76–1.81 s** (`ml/moshi/bench_moshi_latency.py`,
+three independent runs; see `docs/M1_BRINGUP_LOG.md`) — not the ~200 ms figure
+Kyutai reports and this plan assumed throughout. This number is measured
+**through M1's throwaway protocol relay** (a hand-rolled Opus/PCM bridge
+needed because Kyutai's real wire protocol didn't match the backend's assumed
+one — see M1_BRINGUP_LOG.md), not through a production Moshi service, so most
+of the gap is a documented *hypothesis* (relay overhead), not yet a confirmed
+one. **M12 must re-run this benchmark against M2's production service** before
+either latency figure is quoted in the final report as representative of the
+architecture rather than of this specific bring-up's plumbing. Until that
+re-measurement exists, do not claim "~200 ms" for Moshi in the report — cite
+the measured 1.6 s figure with the relay caveat, exactly as this section
+already insists for the cascade side.
+
 **Moshi's real limitations, stated plainly, because they will come up in the defense:**
 
 - It is **English-only**.
@@ -156,8 +171,8 @@ Two decisions worth defending in the report:
 
 | ID | Task | Output |
 |---|---|---|
-| M1 | **Day-one critical path: Moshi on the RTX 5050.** Driver, CUDA 12.8+, Candle build for `sm_120`, q4/q8 weights, measured latency. Everything flagship depends on this. Timebox 2 days; escalate immediately on failure. | Working native S2S host |
-| M2 | Moshi streaming service: WebSocket server wrapping Candle, exposing audio in/out **plus the Inner Monologue text stream** for A4 | Flagship model service |
+| M1 | ✅ **DONE (2026-09-05).** Moshi on the RTX 5050. `moshi-backend.exe` (Kyutai's Rust/Candle server) builds and runs on Blackwell/sm_120 with q8 weights. Measured latency: p50≈1.6s/p95≈1.76-1.81s (through a throwaway relay — see below). Full record: `docs/M1_BRINGUP_LOG.md`. | Working native S2S host |
+| M2 | Moshi streaming service: WebSocket server wrapping Candle, exposing audio in/out **plus the Inner Monologue text stream** for A4. **Start here, not from scratch:** M1 already proved the toolchain and left `ml/moshi/relay.py` as a working (but buggy) reference implementation of exactly this bridge — see "M2 starting point" below. | Flagship model service |
 | M3 | Acquire SEP-28k: labels are public, **audio must be fetched from source podcasts** — start day one, it is slow. Fallback: FluencyBank or a reduced label set. | Acoustic dataset |
 | M4 | Train the dysfluency classifier: wav2vec2-base + multi-label head (block, prolongation, sound-rep, word-rep, interjection). Report per-class F1. | Acoustic analyzer |
 | M5 | Define the acoustic-tag schema **jointly with A12** — the Track A ↔ Track M contract. Freeze in week 1. | Shared JSON schema |
@@ -168,6 +183,34 @@ Two decisions worth defending in the report:
 | M10 | **Optimization analysis** — QLoRA + 4-bit quantization measured on model size, peak VRAM, tokens/sec, TTFT, quality delta vs FP16 | **Required optimization technique** |
 | M11 | **Moshi LoRA coaching adapter** — fine-tune the backbone toward the coaching persona, since Moshi cannot be system-prompted. Stretch goal; cut if week 7 is tight. | Steerable flagship |
 | M12 | Comparative evaluation: Moshi vs cascade on latency (p50/p95), dysfluency perception fidelity, and response groundedness | **Thesis headline result** |
+
+#### M2 starting point (handed off from M1, 2026-09-05)
+
+M1 built and left running: `moshi-backend.exe` (Kyutai's Rust/Candle server,
+built for CUDA/sm_120, q8 weights) and `ml/moshi/relay.py` (a Python bridge
+translating Kyutai's real wire protocol to the plain-`ws://`+PCM protocol
+`backend/app/services/moshi.py` already expects — see `docs/M1_BRINGUP_LOG.md`
+for the full protocol mismatch and why a bridge is needed at all). The relay
+is explicitly throwaway/proof-of-concept, not production, with three known
+bugs M2 should fix rather than inherit:
+
+1. Segfaults on connection teardown (hand-rolled ctypes Ogg/Opus bindings).
+2. Its Opus encoder crashes the client connection on real speech content
+   (works fine on silence) — root cause not isolated in M1.
+3. No `ERROR`-tag translation when the upstream Candle connection itself
+   fails — client just sees an abrupt close, no diagnostic.
+
+Also required to build `moshi-backend.exe` from source (see the log for full
+detail): CUDA 12.8 installed alongside a newer system CUDA (a dependency
+crate's version-detection doesn't recognize CUDA 13.x), Visual Studio's
+`vcvars64.bat` sourced for the MSVC linker, and `CMAKE_POLICY_VERSION_MINIMUM=3.5`
+for an old vendored CMakeLists in a transitive dependency.
+
+Read `docs/M1_BRINGUP_LOG.md` in full before starting M2 — it is the complete
+record of what works, what's broken, and why, including the measured latency
+breakdown M2's production service should be benchmarked against
+(`ml/moshi/bench_moshi_latency.py`, reusable as-is against a new service on
+the same port/protocol contract).
 
 ### Shared
 
@@ -202,7 +245,7 @@ All eleven minimum required features, mapped to owner. **Note how many live in t
 
 ## Sequencing
 
-- **Week 1** — A1, A2, **M1 (Moshi bring-up, critical path)**, M3 (start SEP-28k download *now*), S1
+- **Week 1** — A1, A2, **M1 (Moshi bring-up, critical path) — ✅ DONE 2026-09-05**, M3 (start SEP-28k download *now*), S1
 - **Week 2** — M2 (Moshi service), A3, A5 (duplex transport + browser audio) → *flagship talking end-to-end*
 - **Week 3** — A4 (Inner Monologue), A9, A10, A11 (RAG); M4, M6 in parallel
 - **Week 4** — A6, A7, A8 (cascade path); M7, M8 (fine-tune + deploy)
@@ -219,7 +262,7 @@ Moshi comes up first because everything flagship depends on M1, and because a Bl
 
 | Risk | Mitigation |
 |---|---|
-| **Moshi fails to run on Blackwell `sm_120`** — the single largest risk, and the whole flagship rests on it | M1 is a day-one 2-day timebox. Fallbacks in order: q8 instead of q4 → CPU Candle inference (degraded but demonstrable) → **cascade becomes the primary product**, which is exactly why A14 has a graceful-degradation path and why the cascade is built regardless. |
+| ~~**Moshi fails to run on Blackwell `sm_120`**~~ — **RESOLVED 2026-09-05.** `moshi-backend.exe` builds and runs on this hardware with q8 weights (no q4 config exists upstream, so q8 was the only quantized variant tried — no CPU fallback was needed). Three real toolchain bugs were found and fixed along the way (CUDA 13.x not recognized by a dependency crate, MSVC linker not on PATH, a CMake policy-version floor) — none Blackwell-specific, all documented in `docs/M1_BRINGUP_LOG.md` for reproducibility. | Full record: `docs/M1_BRINGUP_LOG.md`. New risk surfaced in its place: **measured Moshi latency (p50≈1.6s) is far above the ~200ms figure this plan assumed** — see the "Measured cascade latency" section's M1 update. M12 must confirm how much of that gap is inherent vs. M1's throwaway relay before the thesis's latency-gap argument can be stated as fact rather than hypothesis. |
 | **Moshi cannot be steered into a coaching persona** — no system prompt exists | M11 LoRA adapter. If that is cut, Moshi carries live rapport and turn-taking while all substantive coaching content is delivered through Knowledge Mode. Documented as a limitation, not hidden. |
 | **Moshi is English-only** | Scope the product to English and state it explicitly in the report's limitations chapter. |
 | **SEP-28k audio retrieval is slow or link-rotted** | Start M3 in week 1. Fallback: FluencyBank, or reduce to a 3-class label set on whatever audio resolves. |
