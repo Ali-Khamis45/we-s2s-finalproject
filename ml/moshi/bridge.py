@@ -18,8 +18,11 @@ from __future__ import annotations
 import fractions
 import io
 import logging
+import queue
+import threading
 
 import av
+from av.audio.resampler import AudioResampler
 
 log = logging.getLogger("moshi.bridge")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -121,3 +124,121 @@ class OpusOggEncoder:
             self._container.mux(packet)
         self._container.close()
         return self._sink.drain()
+
+
+class OpusOggDecoder:
+    """Decodes a continuous, arbitrarily-chunked Ogg/Opus byte stream into PCM.
+
+    Runs its own `av.open()` + demux loop once, on a dedicated thread, over a
+    BLOCKING reader whose `readinto` waits on a queue for the next chunk
+    instead of ever returning 0 for "nothing available yet." This is
+    required, not a style choice: PyAV 18.1.0's Ogg demuxer treats a
+    `readinto` returning 0 as permanent end-of-stream, so a synchronous
+    feed()-returns-bytes design that lets the reader signal "nothing right
+    now" via a 0 return breaks the first time the worker catches up to the
+    buffered bytes -- confirmed by spike during this task's implementation
+    (see this task's Revision note above). A blocking reader in its own
+    thread sidesteps the issue entirely: the demuxer's `readinto` call
+    simply blocks until real bytes (or close()'s EOF sentinel) arrive.
+
+    Call `feed(chunk)` with whatever bytes arrived in one websocket message
+    to push them to the worker (non-blocking). Call `poll()` to drain
+    whatever 16-bit PCM has been decoded so far, resampled to `sample_rate`
+    (Opus decodes at a fixed 48kHz internally regardless of the stream's
+    negotiated rate -- see design spec finding 2). Call `close()` once no
+    more input is coming, to signal real EOF and join the worker thread.
+    """
+
+    def __init__(self, sample_rate: int = SAMPLE_RATE, channels: int = CHANNELS) -> None:
+        self.sample_rate = sample_rate
+        self.channels = channels
+        self._in_q: queue.Queue[bytes | None] = queue.Queue()
+        self._out_q: queue.Queue[tuple[str, object]] = queue.Queue()
+        self._resampler = AudioResampler(
+            format="s16", layout="mono" if channels == 1 else "stereo", rate=sample_rate
+        )
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    class _BlockingReader(io.RawIOBase):
+        """readinto() blocks on the queue; only returns 0 for real EOF."""
+
+        def __init__(self, in_q: "queue.Queue[bytes | None]") -> None:
+            self._q = in_q
+            self._buf = b""
+            self._eof = False
+
+        def readable(self) -> bool:
+            return True
+
+        def readinto(self, dst: bytearray) -> int:
+            while not self._buf:
+                if self._eof:
+                    return 0
+                item = self._q.get()  # blocks until feed() or close() posts
+                if item is None:
+                    self._eof = True
+                    return 0
+                self._buf = item
+            n = min(len(dst), len(self._buf))
+            dst[:n] = self._buf[:n]
+            self._buf = self._buf[n:]
+            return n
+
+    def _run(self) -> None:
+        reader = self._BlockingReader(self._in_q)
+        try:
+            container = av.open(reader, mode="r", format="ogg")
+        except Exception as exc:
+            self._out_q.put(("error", exc))
+            return
+        stream = container.streams.audio[0]
+        try:
+            for packet in container.demux(stream):
+                for frame in packet.decode():
+                    for out_frame in self._resampler.resample(frame):
+                        pcm = bytes(out_frame.planes[0])[
+                            : out_frame.samples * 2 * self.channels
+                        ]
+                        self._out_q.put(("pcm", pcm))
+        except av.error.EOFError:
+            pass
+        except Exception as exc:
+            self._out_q.put(("error", exc))
+        container.close()
+        self._out_q.put(("done", None))
+
+    def feed(self, chunk: bytes) -> None:
+        if chunk:
+            self._in_q.put(chunk)
+
+    def poll(self, timeout: float = 0.05) -> bytes:
+        """Drain whatever PCM has been decoded so far.
+
+        Blocks up to `timeout` waiting for at least one item, then drains
+        anything else already queued without waiting further.
+        """
+        out = bytearray()
+        try:
+            kind, payload = self._out_q.get(timeout=timeout)
+            if kind == "pcm":
+                out += payload  # type: ignore[arg-type]
+            elif kind == "error":
+                raise payload  # type: ignore[misc]
+            # "done": nothing to add, just stop waiting for more.
+        except queue.Empty:
+            return b""
+        while True:
+            try:
+                kind, payload = self._out_q.get_nowait()
+            except queue.Empty:
+                break
+            if kind == "pcm":
+                out += payload  # type: ignore[arg-type]
+            elif kind == "error":
+                raise payload  # type: ignore[misc]
+        return bytes(out)
+
+    def close(self) -> None:
+        self._in_q.put(None)
+        self._thread.join(timeout=5)
