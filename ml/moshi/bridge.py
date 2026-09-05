@@ -171,6 +171,7 @@ class OpusOggDecoder:
             self._q = in_q
             self._buf = b""
             self._eof = False
+            self.bytes_received = 0
 
         def readable(self) -> bool:
             return True
@@ -187,18 +188,28 @@ class OpusOggDecoder:
             n = min(len(dst), len(self._buf))
             dst[:n] = self._buf[:n]
             self._buf = self._buf[n:]
+            if n > 0:
+                self.bytes_received += n
             return n
 
     def _run(self) -> None:
         reader = self._BlockingReader(self._in_q)
         try:
             container = av.open(reader, mode="r", format="ogg")
-        except av.error.EOFError:
-            # close() was called before any bytes were ever fed (e.g. a
-            # connection that carried no KT_AUDIO at all) -- an empty
-            # stream, not a decode failure. Treat it like EOF during an
-            # in-progress demux: end quietly with no PCM produced.
-            self._out_q.put(("done", None))
+        except av.error.EOFError as exc:
+            if reader.bytes_received == 0:
+                # close() was called before any bytes were ever fed (e.g. a
+                # connection that carried no KT_AUDIO at all) -- an empty
+                # stream, not a decode failure. Treat it like EOF during an
+                # in-progress demux: end quietly with no PCM produced.
+                self._out_q.put(("done", None))
+            else:
+                # Some bytes were fed but the probe never completed (e.g. a
+                # truncated/corrupt Ogg capture followed by an unclean
+                # upstream disconnect) -- a real failure, not an empty
+                # stream. Must be reported, not silently swallowed, or a
+                # genuine decode failure never reaches the client.
+                self._out_q.put(("error", exc))
             return
         except Exception as exc:
             self._out_q.put(("error", exc))

@@ -5,6 +5,8 @@ import math
 import struct
 import time
 
+import pytest
+
 from ml.moshi.bridge import OpusOggDecoder, OpusOggEncoder
 
 SAMPLE_RATE = 24_000
@@ -94,3 +96,26 @@ def test_decoder_handles_arbitrary_chunk_boundaries() -> None:
     dec.close()
     total_pcm += dec.poll(timeout=1.0)
     assert len(total_pcm) > 0
+
+
+def test_decoder_closed_with_zero_bytes_fed_produces_empty_pcm_no_error() -> None:
+    """The original bug: closing a decoder that was NEVER fed any bytes
+    (e.g. a text-only exchange with no KT_AUDIO) must not raise -- it's a
+    benign empty stream, not a decode failure."""
+    dec = OpusOggDecoder()
+    dec.close()
+    pcm = dec.poll(timeout=1.0)
+    assert pcm == b""
+
+
+def test_decoder_closed_after_partial_bytes_reports_error() -> None:
+    """Some bytes were fed (a truncated/corrupt Ogg capture) but the probe
+    never completed before close() -- this must surface as a real error via
+    poll(), not be silently swallowed as if it were an empty stream."""
+    dec = OpusOggDecoder()
+    # A handful of bytes that look like the start of an Ogg stream but never
+    # form a complete, valid page/header -- av.open()'s probe cannot succeed.
+    dec.feed(b"OggS")
+    dec.close()
+    with pytest.raises(Exception):
+        dec.poll(timeout=1.0)
