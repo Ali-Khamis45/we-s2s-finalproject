@@ -321,10 +321,18 @@ async def bridge_upstream_to_client(upstream, client) -> None:
             # by spike that cancelling immediately drops 100% of a short
             # real-audio test case's output, since decode can finish shortly
             # after the last KT_AUDIO frame is fed.
-            await asyncio.to_thread(decoder.close)
+            # Suppress teardown-time decode errors here too: if this
+            # coroutine is being cancelled (the normal path when the other
+            # bridge direction finishes first -- e.g. client disconnect),
+            # an incomplete Ogg probe can make close() raise a real decode
+            # error, which would otherwise mask the CancelledError below.
+            with contextlib.suppress(Exception):
+                await asyncio.to_thread(decoder.close)
             drain_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await drain_task
+    except asyncio.CancelledError:
+        raise  # never translate a cancel into an ERROR frame
     except Exception as exc:
         detail = f"{type(exc).__name__}: {exc}".encode("utf-8", errors="replace")
         try:

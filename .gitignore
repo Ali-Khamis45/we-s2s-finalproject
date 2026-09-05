@@ -39,10 +39,8 @@ ml/moshi/weights-q4/
 # by moshi-backend into the HF cache, not here, but kept as a safeguard),
 # and the local dev TLS cert.
 ml/moshi/candle-moshi/
-# M1 Task 5/6: relay.py's own runtime logs (not source, regenerated per run).
-ml/moshi/_relay.log
-ml/moshi/_relay_err.log
-ml/moshi/_bench_relay.log
+# M2: bridge.py's own runtime logs (not source, regenerated per run).
+ml/moshi/_bench_bridge.log
 ml/finetuning/checkpoints/
 ml/finetuning/adapters/
 
