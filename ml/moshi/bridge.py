@@ -321,15 +321,18 @@ async def bridge_upstream_to_client(upstream, client) -> None:
             # by spike that cancelling immediately drops 100% of a short
             # real-audio test case's output, since decode can finish shortly
             # after the last KT_AUDIO frame is fed.
-            # Suppress teardown-time decode errors here too: if this
-            # coroutine is being cancelled (the normal path when the other
-            # bridge direction finishes first -- e.g. client disconnect),
-            # an incomplete Ogg probe can make close() raise a real decode
-            # error, which would otherwise mask the CancelledError below.
-            with contextlib.suppress(Exception):
-                await asyncio.to_thread(decoder.close)
+            await asyncio.to_thread(decoder.close)
             drain_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
+            # Suppress EVERYTHING here, not just CancelledError: drain_task
+            # can be mid-poll() when cancelled, and poll() re-raises any
+            # queued decode error (e.g. an Ogg stream that received some
+            # bytes but never completed its probe before this coroutine was
+            # torn down). That error must never replace or mask whatever
+            # actually triggered this teardown -- a real CancelledError
+            # propagating through receive_upstream() above, or a normal
+            # return. drain_task's only job during teardown is "stop
+            # quickly"; nothing it raises here is actionable.
+            with contextlib.suppress(BaseException):
                 await drain_task
     except asyncio.CancelledError:
         raise  # never translate a cancel into an ERROR frame

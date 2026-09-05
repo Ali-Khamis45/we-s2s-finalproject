@@ -14,6 +14,7 @@ from ml.moshi.bridge import (
     OUR_AUDIO,
     OUR_ERROR,
     OUR_TEXT,
+    OpusOggDecoder,
     bridge_upstream_to_client,
 )
 
@@ -54,38 +55,66 @@ async def test_upstream_error_tag_translated() -> None:
     assert client.sent == [bytes([OUR_ERROR]) + b"model crashed"]
 
 
+def test_decoder_poll_raises_after_close_on_incomplete_ogg_probe() -> None:
+    """Establishes the precondition deterministically, no timing needed:
+    feed an OpusOggDecoder a few bytes of an incomplete Ogg capture (enough
+    that bytes_received > 0, never enough to complete a valid probe), call
+    close() (which blocks until the worker thread has fully torn down and
+    queued its result), then verify poll() raises the queued decode error.
+    This is the exact condition bridge_upstream_to_client's drain_task can
+    be cancelled in the middle of."""
+    decoder = OpusOggDecoder()
+    # "OggS" is a real Ogg capture pattern but far too little data for PyAV
+    # to ever successfully open the container -- feed() sees bytes, but the
+    # probe never completes.
+    decoder.feed(b"OggS")
+    decoder.feed(b"\x00\x02\x00\x00")
+    decoder.close()  # blocks until the worker thread queues ("error", ...)
+
+    with pytest.raises(Exception):
+        decoder.poll(0)
+
+
 @pytest.mark.asyncio
 async def test_cancellation_during_incomplete_stream_is_not_swallowed() -> None:
     """Final-review finding: handler() cancels whichever bridge direction is
     still running when the other finishes first -- the NORMAL disconnect
-    path, not an edge case. If that cancellation lands while decoder.close()
-    is tearing down an incomplete Ogg probe (bytes fed, container never
-    opened), the worker thread queues a real decode error. That error must
-    not be allowed to shadow the CancelledError: this coroutine must let
+    path, not an edge case. If that cancellation lands while drain_task is
+    mid-poll() and poll() re-raises a queued decode error from an incomplete
+    Ogg probe (bytes fed, container never opened), that error must not be
+    allowed to shadow the CancelledError: this coroutine must let
     CancelledError propagate, and must never turn a cancel into an OUR_ERROR
-    frame sent to the client."""
+    frame sent to the client.
 
-    class TricklingSocket:
-        """Yields a few bytes of a valid-but-incomplete Ogg stream, slowly,
-        so there's a window to cancel mid-stream before the container ever
-        finishes probing."""
+    Deterministic by construction, not timing-based: the fake upstream
+    yields one KT_AUDIO frame carrying the same incomplete-Ogg bytes proven
+    above to make poll() raise, then blocks forever on an Event that never
+    fires. A single `await asyncio.sleep(0)` lets the event loop run once so
+    the task starts, feeds the decoder, and parks on the never-firing wait
+    -- not a timing race, just "let the task reach its first real await
+    point" -- before the task is cancelled. Because decoder.close() (called
+    in bridge_upstream_to_client's finally block) blocks until the worker
+    thread has queued its ("error", ...) item, drain_task's next poll() call
+    is guaranteed to raise -- no sleep-based race against the worker thread
+    is needed."""
+
+    class BlocksForeverSocket:
+        """Yields one incomplete-Ogg KT_AUDIO frame, then hangs forever
+        (rather than completing or sleeping), so cancellation always lands
+        while the coroutine is parked waiting for the "next" frame."""
 
         def __aiter__(self):
             return self._gen()
 
         async def _gen(self):
-            # "OggS" is a real Ogg capture pattern but far too little data
-            # for PyAV to ever successfully open the container -- feed()
-            # sees bytes, but the probe never completes.
-            for chunk in (b"OggS", b"\x00\x02\x00\x00"):
-                await asyncio.sleep(0.05)
-                yield bytes([KT_AUDIO]) + chunk
+            yield bytes([KT_AUDIO]) + b"OggS\x00\x02\x00\x00"
+            await asyncio.Event().wait()  # never set: blocks forever
 
-    upstream = TricklingSocket()
+    upstream = BlocksForeverSocket()
     client = FakeSocket([])
 
     task = asyncio.create_task(bridge_upstream_to_client(upstream, client))
-    await asyncio.sleep(0.06)  # let at least one chunk be fed
+    await asyncio.sleep(0)  # let the task start and reach its first await
     task.cancel()
 
     with pytest.raises(asyncio.CancelledError):
