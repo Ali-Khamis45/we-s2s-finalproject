@@ -15,13 +15,17 @@ spike that fixed the config values used below.
 """
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import fractions
 import io
 import logging
 import queue
+import ssl
 import threading
 
 import av
+import websockets
 from av.audio.resampler import AudioResampler
 
 log = logging.getLogger("moshi.bridge")
@@ -189,6 +193,13 @@ class OpusOggDecoder:
         reader = self._BlockingReader(self._in_q)
         try:
             container = av.open(reader, mode="r", format="ogg")
+        except av.error.EOFError:
+            # close() was called before any bytes were ever fed (e.g. a
+            # connection that carried no KT_AUDIO at all) -- an empty
+            # stream, not a decode failure. Treat it like EOF during an
+            # in-progress demux: end quietly with no PCM produced.
+            self._out_q.put(("done", None))
+            return
         except Exception as exc:
             self._out_q.put(("error", exc))
             return
@@ -242,3 +253,133 @@ class OpusOggDecoder:
     def close(self) -> None:
         self._in_q.put(None)
         self._thread.join(timeout=5)
+
+
+async def bridge_upstream_to_client(upstream, client) -> None:
+    """Translate Candle's real protocol into ours, one direction.
+
+    OpusOggDecoder decodes on its own worker thread (see Task 2's Revision
+    note -- required by a real PyAV EOF-latching limitation, not a style
+    choice), so this coroutine calls `decoder.poll()` via `asyncio.to_thread`
+    to drain decoded PCM without blocking the event loop while `poll()`
+    waits on its internal queue.
+
+    Any failure reading from upstream -- a decode error, or the connection
+    itself dying uncleanly -- is reported to the client as an OUR_ERROR
+    frame before this coroutine returns, rather than the client just seeing
+    an abrupt close (the relay's third known gap).
+    """
+    decoder = OpusOggDecoder()
+
+    async def drain_decoded() -> None:
+        """Forward decoded PCM to the client until cancelled.
+
+        Runs as a concurrent task alongside receive_upstream() below, since
+        PCM can finish decoding well after the last KT_AUDIO frame was fed
+        to the (already-buffering) worker thread -- see the closing
+        sequence below for why decoder.close() must complete before this
+        task is cancelled.
+        """
+        while True:
+            pcm = await asyncio.to_thread(decoder.poll, 0.05)
+            if pcm:
+                await client.send(bytes([OUR_AUDIO]) + pcm)
+
+    async def receive_upstream() -> None:
+        async for frame in upstream:
+            if not frame:
+                continue
+            tag, payload = frame[0], frame[1:]
+            log.debug("upstream->client: tag=%s payload_len=%d", tag, len(payload))
+            if tag == KT_AUDIO:
+                decoder.feed(payload)
+            elif tag == KT_TEXT:
+                await client.send(bytes([OUR_TEXT]) + payload)
+            elif tag == KT_ERROR:
+                await client.send(bytes([OUR_ERROR]) + payload)
+            # KT_HANDSHAKE, KT_CONTROL, KT_METADATA, KT_PING: no equivalent
+            # our client models: drop rather than guess at a mapping.
+
+    try:
+        drain_task = asyncio.create_task(drain_decoded())
+        try:
+            await receive_upstream()
+        finally:
+            # Signal real EOF and let the worker thread finish emitting any
+            # PCM still in flight BEFORE cancelling the drain task -- verified
+            # by spike that cancelling immediately drops 100% of a short
+            # real-audio test case's output, since decode can finish shortly
+            # after the last KT_AUDIO frame is fed.
+            await asyncio.to_thread(decoder.close)
+            drain_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await drain_task
+    except Exception as exc:
+        detail = f"{type(exc).__name__}: {exc}".encode("utf-8", errors="replace")
+        try:
+            await client.send(bytes([OUR_ERROR]) + detail)
+        except Exception:
+            pass  # client already gone; nothing more to do
+
+
+async def bridge_client_to_upstream(client, upstream) -> None:
+    encoder = OpusOggEncoder()
+    try:
+        async for frame in client:
+            if not frame:
+                continue
+            tag, payload = frame[0], frame[1:]
+            log.debug("client->upstream: tag=%s payload_len=%d", tag, len(payload))
+            if tag == OUR_AUDIO:
+                ogg_bytes = encoder.feed(payload)
+                if ogg_bytes:
+                    await upstream.send(bytes([KT_AUDIO]) + ogg_bytes)
+            # OUR_HANDSHAKE/OUR_CONTROL carry no payload our client sends today;
+            # extend here if a later task starts sending them.
+    finally:
+        tail = encoder.close()
+        if tail:
+            try:
+                await upstream.send(bytes([KT_AUDIO]) + tail)
+            except Exception as exc:
+                log.debug("  tail send failed: %r", exc)
+
+
+async def handler(client) -> None:
+    ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE  # local self-signed dev cert only
+    log.info("client connected, dialing upstream %s", UPSTREAM_URL)
+    try:
+        async with websockets.connect(UPSTREAM_URL, ssl=ssl_ctx, max_size=None) as upstream:
+            done, pending = await asyncio.wait(
+                [
+                    asyncio.create_task(bridge_upstream_to_client(upstream, client)),
+                    asyncio.create_task(bridge_client_to_upstream(client, upstream)),
+                ],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for task in pending:
+                task.cancel()
+            for task in done:
+                exc = task.exception()
+                if exc:
+                    log.info("bridge task ended: %r", exc)
+    except Exception as exc:
+        detail = f"could not reach Moshi: {type(exc).__name__}: {exc}"
+        log.info(detail)
+        try:
+            await client.send(bytes([OUR_ERROR]) + detail.encode("utf-8", errors="replace"))
+        except Exception:
+            pass
+    log.info("client disconnected")
+
+
+async def main() -> None:
+    async with websockets.serve(handler, LISTEN_HOST, LISTEN_PORT, max_size=None):
+        print(f"bridge listening on ws://{LISTEN_HOST}:{LISTEN_PORT}/api/chat")
+        await asyncio.Future()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
