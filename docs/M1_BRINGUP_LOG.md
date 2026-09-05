@@ -36,8 +36,51 @@ Confirmed: `curl -sk https://localhost:8998/` returns HTTP 200. Server log:
 ~65 minutes — dominated by the first-run weight download, not GPU warm-up.
 
 ## Measured latency (time to first audio)
-TBD — pending Task 6 (needs the relay from Task 5 first, since backend/app/services/moshi.py
-cannot speak Kyutai's real protocol directly)
+
+**Measured 2026-09-05, via `ml/moshi/bench_moshi_latency.py`:**
+
+    time to first audio: p50=1636.2ms p95=1808.0ms n=10
+
+- GPU state: warm (CUDA, q8 weights, model resident on `Cuda(DeviceId(1))`,
+  ~7.7 GB / 8.15 GB VRAM used just to hold the model — little headroom on the
+  RTX 5050's 8 GB).
+- Weight variant: q8 (`kyutai/moshiko-candle-q8`), same as the rest of this
+  log.
+- 1 warm-up run excluded (1679.5ms, consistent with the reported samples —
+  no meaningful warm-up effect beyond the model already being resident).
+- Individual samples (ms): 1690.5, 1808.0, 1644.0, 1505.0, 1720.2, 1672.4,
+  1628.4, 1561.8, 1510.6, 1576.7.
+
+**This is measured through the full real pipeline** (client PCM ->
+`ml/moshi/relay.py`'s Ogg/Opus encode -> `wss://` -> Candle server -> Mimi
+codec + LM inference on GPU -> Ogg/Opus decode -> plain PCM back to the
+client), using `backend/app/services/moshi.py`'s actual `moshi_client`/
+`MoshiStream` with zero modifications — not a shortcut or a component-level
+estimate.
+
+**~1.6-1.8s is well above the plan's ~200ms target figure for Moshi**, and
+this is reported as a finding, not smoothed over. Two contributing factors,
+both tied to this specific bring-up rather than to Moshi's architecture:
+1. The client streams 40ms audio chunks in a wait-for-the-first-real-output
+   pattern; the underlying Mimi codec operates at 12.5Hz (80ms/frame) with a
+   causal encoder that needs several frames of lookahead before its first
+   codebook token is available at all, so some multiple of 80ms is an
+   unavoidable structural floor — but 1.6s is roughly 20 frames' worth, well
+   past what that alone explains.
+2. `ml/moshi/relay.py` (Task 5's hand-rolled ctypes Ogg/Opus bridge, built as
+   a proof-of-bridge, not production code) adds its own encode/decode and
+   inter-process overhead on top of Moshi's own latency, and is the most
+   likely place the gap between "structural floor" and "measured 1.6s" is
+   coming from. M2's production bridge replacing this relay is the natural
+   place to find out how much of this ~1.6s is relay overhead vs. genuinely
+   Moshi/Candle-server-side, and should re-run this same benchmark once it
+   lands for a cleaner number.
+
+See `.superpowers/sdd/task-6-report.md` for the full account of what else
+this task found while getting to a working, repeatable measurement
+(a chunk-size bug and a content-dependent encoder crash in the relay, both
+worked around in the benchmark script rather than fixed in the relay itself,
+since fixing throwaway Task 5 code was out of this task's scope).
 
 ## Task 5: Protocol relay (Opus/Ogg <-> PCM, tag remap, wss:// <-> ws://)
 
@@ -119,6 +162,73 @@ real time in both directions.
   design, not a relay defect: the same probe with continuous streaming input
   works. `moshi_client.available()` (Step 5) is unaffected either way since it
   only opens and immediately closes the connection.
+
+## Task 6: Latency benchmark (p50/p95 time to first audio)
+
+`ml/moshi/bench_moshi_latency.py`, run against the live stack (`moshi-backend.exe`
+on 8999, `ml/moshi/relay.py` on 8998), through `backend/app/services/moshi.py`'s
+real `moshi_client`/`MoshiStream` with no changes to that module. Result and
+GPU/weight state are recorded above under "Measured latency".
+
+**Chunk size bug found (20ms chunks silently break the stream).** The brief's
+original draft (and Task 5's own verification) used 20ms PCM chunks. Streamed
+through `ml/moshi/relay.py`'s per-frame-flushed Ogg muxer, the Candle server's
+async Ogg/Opus decoder (`spawn_recv_loops` in `stream_both.rs`) would silently
+stop consuming input after ~3 mimi frames (`last_step_idx: 3` in every session
+summary JSON under `%USERPROFILE%\tmp\moshi-logs\`, regardless of how many
+chunks kept being sent), with no error on either side — the websocket stayed
+open, the model just stopped advancing. Root cause: the Candle server's own
+input decode loop (`spawn_recv_loops`) flushes decoded PCM to the model in
+40ms quanta (`size_in_buf >= 24_000/25`); 20ms chunks are half that quantum,
+and the resulting misalignment with the relay's per-Opus-frame page flushing
+appears to corrupt the Ogg stream from the server's perspective. **40ms
+chunks (matching the flush quantum exactly) do not hit this** and were used
+for the final measurement.
+
+**`ml/moshi/relay.py` segfaults on connection teardown, and separately on
+real speech content.** Two distinct, reproducible issues in Task 5's
+hand-rolled ctypes Ogg/Opus muxer (its own report already flagged this code
+as throwaway, not production):
+1. The relay process reliably crashes (confirmed via a literal
+   `Segmentation fault` from the shell, zero Python traceback — a native
+   crash, not a Python exception) shortly after a client connection closes.
+   Worked around by having the benchmark treat the relay as fully disposable:
+   restart it fresh before every iteration, confirm the port is listening via
+   a bare TCP connect (deliberately not a full `moshi_client.available()`
+   protocol probe, to avoid touching the Candle server before the measured
+   session), then run one iteration.
+2. Streaming the fixture's real (non-silent) synthesized-speech PCM through
+   the relay made the *client*'s connection die within milliseconds, every
+   time — confirmed the relay process itself and the Candle server both
+   stayed healthy throughout; only that one client connection broke. The
+   exact same code path, chunk size, and pacing with all-zero silence PCM
+   instead works reliably (confirmed across 10+ consecutive successful runs).
+   The benchmark streams silence rather than the fixture's decoded speech as
+   a result — still a genuine measurement of Moshi's full pipeline latency,
+   since Moshi generates its own audio output continuously as a full-duplex
+   conversational model rather than echoing input, but a deviation from the
+   original design worth flagging. Root cause not isolated further (out of
+   this task's scope to debug someone else's throwaway ctypes code); a
+   reasonable guess is the same class of Opus-packet-size/lacing-buffer
+   fragility already documented in Task 5's report, now manifesting on
+   higher-entropy (non-zero) packet content rather than the framing issue
+   Task 5 already fixed.
+
+**GPU memory leak observed and worked around, not fixed.** Repeated
+connect/disconnect cycles against `moshi-backend.exe` during this task's
+debugging (dozens of connections over ~40 minutes) drove GPU memory from its
+normal ~7.7 GB up to 7.8 GB out of the RTX 5050's 8.15 GB — high enough that
+sessions started failing with no error before even one audio-processing step
+completed. Killing and restarting `moshi-backend.exe` reclaimed the memory
+immediately (7800 MB -> 801 MB) and restored normal operation. The final
+benchmark run (10 iterations after warm-up, ~20 relay-restart cycles total)
+did **not** reproduce this leak on its own — GPU memory stayed flat at
+~7.75 GB throughout — so the leak appears tied to something in the debugging
+session's connection pattern (rapid successive connects with irregular
+teardown timing) rather than to normal per-iteration use. Flagged here so a
+future long-running session (M2's production bridge, or a much larger N on
+this same benchmark) watches `nvidia-smi` rather than assuming a session that
+starts failing mid-run is Moshi-side.
 
 ## Known limitations / deviations from plan
 - Plan originally assumed a single `cargo build --features cuda` would work out of the box; three environment-specific fixes were needed (see "Build blockers found and fixed" above). None of these are Blackwell/sm_120-specific — they are generic CUDA-13-vs-cudarc, MSVC-PATH, and CMake-version issues that would recur on any fresh Windows box building this exact dependency tree.
