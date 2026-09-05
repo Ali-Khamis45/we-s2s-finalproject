@@ -172,7 +172,7 @@ Two decisions worth defending in the report:
 | ID | Task | Output |
 |---|---|---|
 | M1 | ✅ **DONE (2026-09-05).** Moshi on the RTX 5050. `moshi-backend.exe` (Kyutai's Rust/Candle server) builds and runs on Blackwell/sm_120 with q8 weights. Measured latency: p50≈1.6s/p95≈1.76-1.81s (through a throwaway relay — see below). Full record: `docs/M1_BRINGUP_LOG.md`. | Working native S2S host |
-| M2 | Moshi streaming service: WebSocket server wrapping Candle, exposing audio in/out **plus the Inner Monologue text stream** for A4. **Start here, not from scratch:** M1 already proved the toolchain and left `ml/moshi/relay.py` as a working (but buggy) reference implementation of exactly this bridge — see "M2 starting point" below. | Flagship model service |
+| M2 | ✅ **DONE (2026-09-05).** `ml/moshi/bridge.py` (PyAV-backed) replaces M1's throwaway relay, fixing all three known bugs (teardown segfault, crash on real speech, missing ERROR translation). Measured time-to-first-audio with real speech content: p50=2009.9ms/p95=2645.0ms. Full record: `docs/superpowers/specs/2026-09-05-m2-moshi-bridge-design.md` and `docs/M1_BRINGUP_LOG.md`'s M2 addendum. | Flagship model service |
 | M3 | Acquire SEP-28k: labels are public, **audio must be fetched from source podcasts** — start day one, it is slow. Fallback: FluencyBank or a reduced label set. | Acoustic dataset |
 | M4 | Train the dysfluency classifier: wav2vec2-base + multi-label head (block, prolongation, sound-rep, word-rep, interjection). Report per-class F1. | Acoustic analyzer |
 | M5 | Define the acoustic-tag schema **jointly with A12** — the Track A ↔ Track M contract. Freeze in week 1. | Shared JSON schema |
