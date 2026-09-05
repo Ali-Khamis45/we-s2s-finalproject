@@ -22,12 +22,12 @@ Command (run from `ml/moshi/candle-moshi/rust/`):
 
     ./target/release/moshi-backend.exe --config moshi-backend/config-q8.json standalone
 
-Server listens at `https://0.0.0.0:8999` (moved off the default 8998 in Task 5
-so the relay could own that port — see `config-q8.json`'s `"port"` field) with
+Server listens at `https://0.0.0.0:8999` (moved off the default 8998 in M1
+so the bridge could own that port — see `config-q8.json`'s `"port"` field) with
 TLS, self-signed — this is Kyutai's real protocol: Opus-in-Ogg audio, tag
 numbering per `rust/protocol.md`), NOT the plain `ws://` + raw-PCM protocol
-`backend/app/services/moshi.py` expects. See `ml/moshi/relay.py` (Task 5) for
-the adapter that bridges the two — the relay, listening on
+`backend/app/services/moshi.py` expects. See `ml/moshi/bridge.py` (M2) for
+the adapter that bridges the two — the bridge, listening on
 `ws://127.0.0.1:8998/api/chat`, not this server directly, is what
 `settings.moshi_url` should point at.
 
