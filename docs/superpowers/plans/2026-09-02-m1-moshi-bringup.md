@@ -219,7 +219,7 @@ git commit -m "chore: ignore third-party Candle clone and Moshi weights"
 
 ---
 
-## Task 5: Build the protocol relay (Opus↔PCM, tag remap, TLS↔plain)
+## Task 5: Build the protocol relay (Opus↔PCM, tag remap, TLS↔plain) — COMPLETE (2026-09-05, review approved)
 
 **Files:**
 - Create: `ml/moshi/relay.py`
@@ -424,7 +424,9 @@ git commit -m "feat: add Opus/PCM protocol relay bridging Kyutai's moshi-backend
 
 ---
 
-## Task 6: Measure and record latency (p50/p95)
+## Task 6: Measure and record latency (p50/p95) — COMPLETE (2026-09-05, review approved after 1 fix cycle)
+
+**Measured result: p50=1600.8ms, p95=1775.9ms, n=10.** See `docs/M1_BRINGUP_LOG.md` for the full writeup including root-cause findings and the silence-not-speech deviation.
 
 **Files:**
 - Create: `ml/moshi/bench_moshi_latency.py`

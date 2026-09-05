@@ -70,10 +70,13 @@ eval-retrieval: ## Recall@k, MRR, nDCG and the gate curve (needs the corpus)
 	$(PY) $(BACKEND)/scripts/calibrate_gate.py
 
 moshi-serve: ## Start Kyutai's Candle server (needs GPU + weights; not the relay)
+	@echo "NOTE: this bring-up was done and verified on Windows; scripts/make.ps1 moshi-serve"
+	@echo "is the tested path. This target is provided for parity but is untested on Linux/macOS"
+	@echo "(binary name and venv layout below assume a Windows build)."
 	@echo "candle server https://localhost:8999 (internal, Kyutai's real protocol)"
 	@echo "relay is NOT started here -- moshi-bench starts its own; for manual"
-	@echo "testing run: $(BACKEND)/.venv/bin/python ml/moshi/relay.py"
-	CUDA_COMPUTE_CAP=120 sh -c 'cd ml/moshi/candle-moshi/rust && ./target/release/moshi-backend --config moshi-backend/config-q8.json standalone'
+	@echo "testing run: $(BACKEND)/.venv/Scripts/python.exe ml/moshi/relay.py"
+	CUDA_COMPUTE_CAP=120 sh -c 'cd ml/moshi/candle-moshi/rust && ./target/release/moshi-backend.exe --config moshi-backend/config-q8.json standalone'
 
 moshi-bench: ## Measure Moshi time-to-first-audio p50/p95 (needs moshi-serve running)
 	$(PY) $(CURDIR)/ml/moshi/bench_moshi_latency.py $(BACKEND)/scripts/words/dysfluent_utterance.wav 10

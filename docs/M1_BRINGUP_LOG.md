@@ -405,8 +405,15 @@ root `Makefile`.
   around by benchmarking with silence instead of the WAV fixture's actual
   decoded audio — still a genuine full-pipeline latency measurement, since
   Moshi generates output continuously rather than echoing input, but a
-  deviation from the original "stream the WAV fixture" design). M2's
-  production bridge should not inherit either issue, and should re-run
+  deviation from the original "stream the WAV fixture" design). It also
+  has no `OUR_ERROR` frame translation when the *upstream* connection to
+  the Candle server itself fails to establish (`websockets.connect` raising
+  inside `handler()`) — the client just sees an abrupt websocket close with
+  no diagnostic payload, even though the wire protocol has an ERROR tag
+  designed for exactly this. Non-blocking (the backend client surfaces this
+  as `MoshiUnavailable`, which is a survivable, already-handled case), but
+  worth fixing for real observability. M2's production bridge should not
+  inherit any of these three issues, and should re-run
   `ml/moshi/bench_moshi_latency.py` (or its successor) once landed to see
   how much of the measured ~1.6s is relay overhead vs. genuinely
   Moshi/Candle-server-side.
@@ -418,6 +425,10 @@ root `Makefile`.
   ~200ms target for Moshi.** This is attributed mostly to
   `ml/moshi/relay.py`'s overhead (hand-rolled ctypes bridge, not
   production code) rather than to Moshi/Candle itself — see "Measured
-  latency" above for the full breakdown. This is expected and already
-  accepted per the M1 plan; M2's production bridge is where that
-  attribution should be confirmed with a cleaner measurement.
+  latency" above for the full breakdown. **This attribution is a
+  well-reasoned hypothesis, not a direct measurement** — no
+  component-level timing (e.g. instrumenting the relay's own encode/decode
+  latency separately from network/GPU time) was taken during M1. This is
+  expected and already accepted per the M1 plan; M2's production bridge is
+  where that attribution should be confirmed with a cleaner measurement,
+  ideally with per-stage timing instrumentation if the gap doesn't close.
