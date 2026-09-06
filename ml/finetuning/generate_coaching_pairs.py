@@ -32,6 +32,11 @@ DEFAULT_OUT_PATH = REPO_ROOT / "data" / "finetuning" / "coaching_pairs.jsonl"
 OLLAMA_URL = "http://localhost:11434/api/generate"
 PASSAGE_WORDS = 200
 
+# qwen3.5:4b is a reasoning model: with think left at its default, its actual
+# output lands in the response's "thinking" field and "response" comes back
+# empty, so every json.loads() below fails. think=False forces the answer
+# into "response" like a normal instruct model.
+
 SYSTEM_PROMPT = """You are generating training data for a speaking-confidence coach \
 aimed at people who stutter or otherwise have speech differences. You are NOT a \
 clinician and must never use diagnostic or treatment language -- this is a \
@@ -68,7 +73,7 @@ def generate_pair(passage: str, model: str, client: httpx.Client) -> dict | None
     try:
         resp = client.post(
             OLLAMA_URL,
-            json={"model": model, "prompt": prompt, "stream": False, "format": "json"},
+            json={"model": model, "prompt": prompt, "stream": False, "format": "json", "think": False},
             timeout=60.0,
         )
         resp.raise_for_status()
@@ -128,7 +133,7 @@ def judge_pair(pair: dict, model: str, client: httpx.Client) -> bool:
     try:
         resp = client.post(
             OLLAMA_URL,
-            json={"model": model, "prompt": prompt, "stream": False, "format": "json"},
+            json={"model": model, "prompt": prompt, "stream": False, "format": "json", "think": False},
             timeout=60.0,
         )
         resp.raise_for_status()
