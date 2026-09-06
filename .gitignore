@@ -54,6 +54,9 @@ data/finetuning/
 # GGUF conversion output.
 ml/finetuning/merged/
 ml/finetuning/gguf/
+# M8: llama.cpp source clone, fetched by hand for convert_hf_to_gguf.py
+# (the prebuilt binary release ships compiled exes only, not this script).
+ml/finetuning/llama.cpp-src/
 
 # ---- Data ----
 # SEP-28k audio is fetched from source podcasts, never redistributed.
