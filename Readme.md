@@ -338,6 +338,7 @@ ml/          Track M — training, quantization, evaluation
 | [`docs/DEMO.md`](docs/DEMO.md) | Walkthrough script |
 | [`docs/ETHICS.md`](docs/ETHICS.md) | Scope boundaries and data handling |
 | [`backend/scripts/README.md`](backend/scripts/README.md) | Every measurement, and how to reproduce it |
+| [`docs/FIX_LOG.md`](docs/FIX_LOG.md) | Defects found bringing the app up on a second machine, with root causes |
 
 ---
 
