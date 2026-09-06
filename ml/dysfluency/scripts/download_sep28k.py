@@ -107,12 +107,25 @@ def _fetch_to_file(url: str, dest: Path, timeout: float) -> None:
 
 
 def _is_retryable(exc: Exception) -> bool:
-    if isinstance(exc, (requests.exceptions.Timeout, requests.exceptions.ConnectionError)):
+    if isinstance(
+        exc,
+        (
+            requests.exceptions.Timeout,
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ChunkedEncodingError,
+        ),
+    ):
         return True
     if isinstance(exc, requests.exceptions.HTTPError):
         status = exc.response.status_code if exc.response is not None else None
         return status is not None and status >= 500
     return False
+
+
+class _PermanentlyDeadHost(Exception):
+    """Raised to fail fast on a host known to be permanently shut down,
+    skipping the retry loop entirely instead of burning a full
+    retry/timeout cycle against a domain that will never answer."""
 
 
 def download_episode(
@@ -135,8 +148,6 @@ def download_episode(
     if wav_path.exists():
         return DownloadResult(success=True, skipped=True)
 
-    episode_dir.mkdir(parents=True, exist_ok=True)
-
     url = episode.url
     rewritten = rewrite_feedproxy_url(url)
     if rewritten is not None:
@@ -147,6 +158,18 @@ def download_episode(
     for attempt in range(retries):
         tmp_download = None
         try:
+            # mkdir belongs inside the per-attempt try/except, not before the
+            # loop: an OSError here (disk full, permissions) is just as
+            # realistic over a multi-hour run as a download failure, and
+            # must not propagate out and abort every remaining episode.
+            episode_dir.mkdir(parents=True, exist_ok=True)
+
+            if rewritten is None and urlparse(episode.url).netloc == "feedproxy.google.com":
+                raise _PermanentlyDeadHost(
+                    "feedproxy.google.com is permanently shut down and no "
+                    "Blubrry rewrite pattern matched this filename"
+                )
+
             with tempfile.NamedTemporaryFile(
                 dir=episode_dir, suffix=ext, delete=False
             ) as tmp:
@@ -202,6 +225,20 @@ class RunStats:
     failed: int = 0
 
 
+def _clean_stale_temp_files(wavs_dir: Path) -> None:
+    """Remove leftover download/conversion temp files from a prior run that
+    was killed between steps (e.g. after a successful raw download but
+    before ffmpeg finished) -- otherwise they just accumulate as garbage
+    across many hours-long resumed runs. Simple disk hygiene, not
+    correctness-critical: a live run's own in-flight temp files are only
+    ever present between calls to run_downloads, never while this runs."""
+    if not wavs_dir.exists():
+        return
+    for pattern in ("tmp*", ".*.wav.tmp"):
+        for stale in wavs_dir.glob(f"*/{pattern}"):
+            stale.unlink(missing_ok=True)
+
+
 def run_downloads(
     episodes: list[Episode],
     wavs_dir: Path,
@@ -210,6 +247,7 @@ def run_downloads(
     timeout: float = 30,
 ) -> RunStats:
     wavs_dir.mkdir(parents=True, exist_ok=True)
+    _clean_stale_temp_files(wavs_dir)
     failure_log = wavs_dir / FAILURE_LOG_NAME
     # Truncate at the start of each run rather than appending across runs --
     # otherwise a still-dead episode logs a fresh duplicate row every re-run,
