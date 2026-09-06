@@ -44,6 +44,12 @@ ml/moshi/_bench_bridge.log
 ml/finetuning/checkpoints/
 ml/dysfluency/checkpoints/
 ml/finetuning/adapters/
+# M8: prebuilt llama.cpp binaries, fetched by hand (not built from source in
+# this repo) -- see ml/finetuning/llama.cpp/README.md.
+ml/finetuning/llama.cpp/*.exe
+ml/finetuning/llama.cpp/*.dll
+# M6: generated dataset (regenerated from the corpus, not source).
+data/finetuning/
 
 # ---- Data ----
 # SEP-28k audio is fetched from source podcasts, never redistributed.
