@@ -18,6 +18,21 @@ LABEL_COLUMNS = ["Block", "Prolongation", "SoundRep", "WordRep", "Interjection"]
 QUALITY_FILTER_COLUMNS = ["PoorAudioQuality", "NoSpeech", "Music", "Unsure"]
 ALL_COUNT_COLUMNS = LABEL_COLUMNS + QUALITY_FILTER_COLUMNS
 
+# Maps LABEL_COLUMNS (this training pipeline's naming) to the values
+# backend/app/schemas/acoustic.py's DysfluencyKind expects (the M5 contract
+# Track A's prompt module and backend/app/services/dysfluency.py's
+# Wav2VecBackend read from a saved checkpoint's id2label/label2id). Any
+# checkpoint trained here must carry these exact strings, in this order, or
+# Wav2VecBackend silently drops every prediction (its label filter rejects
+# anything not in DysfluencyKind) and falls back to the heuristic backend.
+DYSFLUENCY_KIND_BY_LABEL_COLUMN = {
+    "Block": "block",
+    "Prolongation": "prolongation",
+    "SoundRep": "sound_repetition",
+    "WordRep": "word_repetition",
+    "Interjection": "interjection",
+}
+
 
 @dataclass(frozen=True)
 class ClipLabel:

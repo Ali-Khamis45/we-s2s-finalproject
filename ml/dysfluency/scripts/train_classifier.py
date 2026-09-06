@@ -20,7 +20,7 @@ from sklearn.metrics import f1_score
 from torch.utils.data import DataLoader, Dataset
 from transformers import Wav2Vec2FeatureExtractor, Wav2Vec2ForSequenceClassification
 
-from sep28k_manifest import LABEL_COLUMNS
+from sep28k_manifest import DYSFLUENCY_KIND_BY_LABEL_COLUMN, LABEL_COLUMNS
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_SPLITS_DIR = REPO_ROOT / "data" / "sep28k" / "audio" / "splits"
@@ -132,10 +132,14 @@ def main() -> None:
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn)
 
+    id2label = {i: DYSFLUENCY_KIND_BY_LABEL_COLUMN[col] for i, col in enumerate(LABEL_COLUMNS)}
+    label2id = {v: k for k, v in id2label.items()}
     model = Wav2Vec2ForSequenceClassification.from_pretrained(
         MODEL_NAME,
         num_labels=len(LABEL_COLUMNS),
         problem_type="multi_label_classification",
+        id2label=id2label,
+        label2id=label2id,
     )
     model.freeze_feature_encoder()
     model.to(device)
