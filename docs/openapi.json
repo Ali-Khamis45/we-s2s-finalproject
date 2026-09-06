@@ -104,7 +104,7 @@
       "Body_analyze_api_analyze_post": {
         "properties": {
           "audio": {
-            "contentMediaType": "application/octet-stream",
+            "format": "binary",
             "title": "Audio",
             "type": "string"
           }
@@ -118,8 +118,8 @@
       "Body_chat_audio_api_chat_audio_post": {
         "properties": {
           "audio": {
-            "contentMediaType": "application/octet-stream",
             "description": "Mono WAV",
+            "format": "binary",
             "title": "Audio",
             "type": "string"
           },
@@ -955,13 +955,6 @@
       },
       "ValidationError": {
         "properties": {
-          "ctx": {
-            "title": "Context",
-            "type": "object"
-          },
-          "input": {
-            "title": "Input"
-          },
           "loc": {
             "items": {
               "anyOf": [
@@ -1045,7 +1038,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "title": "Response Analyze Api Analyze Post",
                   "type": "object"
                 }
@@ -1267,7 +1259,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "title": "Response Export Me Api Auth Me Export Get",
                   "type": "object"
                 }
@@ -1517,7 +1508,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "title": "Response Corpus Status Api Corpus Get",
                   "type": "object"
                 }
@@ -1559,7 +1549,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "title": "Response Ingest Api Corpus Ingest Post",
                   "type": "object"
                 }
@@ -1598,7 +1587,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "title": "Response Manifest Api Corpus Manifest Get",
                   "type": "object"
                 }
@@ -1692,7 +1680,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "title": "Response Acoustic Schema Api Schema Acoustic Get",
                   "type": "object"
                 }
@@ -2096,7 +2083,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "title": "Response Status Api Status Get",
                   "type": "object"
                 }
@@ -2120,7 +2106,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "title": "Response Health Health Get",
                   "type": "object"
                 }

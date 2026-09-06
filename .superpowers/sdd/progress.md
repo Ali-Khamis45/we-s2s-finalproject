@@ -63,3 +63,13 @@ Re-review 3 (FINAL, clean): independently verified BOTH requirements hold simult
 
 READY TO MERGE: Yes, per final whole-branch review.
 Final head commit: a13aa8b
+
+# M4 Dysfluency Classifier — Progress Ledger
+
+Plan: docs/superpowers/plans/2026-09-06-m4-dysfluency-classifier.md
+Branch: m4-dysfluency-training (branched from master post-M3-merge, carries forward the design spec + plan commits)
+
+Task 1: complete (commits faf5c12..dfea63a, review clean/Approved). ml/requirements.txt torch pin fixed to 2.11.0+cu128 (matches what's actually installed/verified locally), M4 vs M7 cloud-only distinction clarified in the top comment, ml/dysfluency/checkpoints/ added to .gitignore.
+Task 2: complete (commits dfea63a..d11785b, review clean/Approved). ml/dysfluency/scripts/sep28k_manifest.py: LABEL_COLUMNS, ClipLabel, load_labels, passes_quality_filter, binarize, split_episodes -- 14/14 tests passing. Reviewer flagged one Important-in-the-abstract finding: split_episodes can silently starve a show's val/test split when that show has very few episodes (round() can hit 0). Checked against the REAL SEP-28k subset (HeStutters 24, MyStutteringLife 38, StutterTalk 82, WomenWhoStutter 110 episodes) -- all comfortably above the danger zone, so not fixed now per YAGNI; noted here as a non-blocking follow-up if this module is ever reused on a much smaller per-show episode count.
+Task 3: complete (commits d11785b..94b5a19, review clean/Approved). ml/dysfluency/scripts/prepare_splits.py: CLI orchestrating Task 2's functions, real run against actual dataset succeeded -- 20,250 labeled clips -> 17,407 after quality filter -> 17,328 after excluding 79 clips with missing audio files (85.6% retained), split train=12,280 (70.87%)/val=2,899 (16.73%)/test=2,149 (12.4%), close to target 70/15/15. Manifests written to data/sep28k/audio/splits/{train,val,test}.csv (gitignored, confirmed not staged).
+Task 4: complete (driven directly, not via subagent -- environment setup only, no commit). Installed torchaudio==2.11.0+cu128, transformers==4.57.6, datasets==3.2.0, accelerate==1.2.1, scikit-learn==1.6.0, pandas==2.2.3, numpy, soundfile==0.12.1, pytest into ml/.venv. Verified: torch 2.11.0+cu128, torchaudio 2.11.0+cu128, transformers 4.57.6, torch.cuda.is_available() == True. ml/.venv confirmed gitignored (.gitignore:5).

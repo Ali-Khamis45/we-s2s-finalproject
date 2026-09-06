@@ -42,7 +42,21 @@ ml/moshi/candle-moshi/
 # M2: bridge.py's own runtime logs (not source, regenerated per run).
 ml/moshi/_bench_bridge.log
 ml/finetuning/checkpoints/
+ml/dysfluency/checkpoints/
 ml/finetuning/adapters/
+# M8: prebuilt llama.cpp binaries, fetched by hand (not built from source in
+# this repo) -- see ml/finetuning/llama.cpp/README.md.
+ml/finetuning/llama.cpp/*.exe
+ml/finetuning/llama.cpp/*.dll
+# M6: generated dataset (regenerated from the corpus, not source).
+data/finetuning/
+# M8: merged fp16 model (regenerated from the base model + adapter) and
+# GGUF conversion output.
+ml/finetuning/merged/
+ml/finetuning/gguf/
+# M8: llama.cpp source clone, fetched by hand for convert_hf_to_gguf.py
+# (the prebuilt binary release ships compiled exes only, not this script).
+ml/finetuning/llama.cpp-src/
 
 # ---- Data ----
 # SEP-28k audio is fetched from source podcasts, never redistributed.
