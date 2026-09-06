@@ -48,6 +48,9 @@ ml/finetuning/adapters/
 # SEP-28k audio is fetched from source podcasts, never redistributed.
 data/sep28k/audio/
 data/fluencybank/
+# M3: third-party clone of apple/ml-stuttering-events-dataset, vendored for
+# its label CSVs only -- not project source.
+ml/dysfluency/sep28k-src/
 data/chroma/**
 !data/chroma/.gitkeep
 data/corpus/**
