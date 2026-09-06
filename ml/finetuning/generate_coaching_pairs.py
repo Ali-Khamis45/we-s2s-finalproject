@@ -92,8 +92,8 @@ def generate_pair(passage: str, model: str, client: httpx.Client) -> dict | None
 
 
 def fast_sanity_check(pair: dict) -> bool:
-    """Cheap heuristic filter in place of full human curation (scope-down for
-    the same-day deadline): reject obviously broken or clinical-sounding output."""
+    """Cheap heuristic filter: reject obviously broken or clinical-sounding
+    output before spending a judge call on it."""
     text = (pair["instruction"] + " " + pair["response"]).lower()
     banned_terms = ["diagnos", "treatment", "cure", "disorder", "therapy", "patholog"]
     if any(term in text for term in banned_terms):
@@ -103,6 +103,49 @@ def fast_sanity_check(pair: dict) -> bool:
     return True
 
 
+JUDGE_PROMPT = """You are a strict quality reviewer for a speaking-confidence coaching \
+dataset. Judge the pair below against ALL of these criteria:
+
+1. CONCRETE: gives specific, actionable advice -- not generic platitudes like "just be \
+   confident" or "practice makes perfect" with nothing else.
+2. ON-TOPIC: the response actually answers the question asked.
+3. NON-REPETITIVE: doesn't just restate the question back as the answer.
+4. APPROPRIATE TONE: warm and encouraging, never clinical, never frames stuttering/speech \
+   differences as something broken or in need of curing.
+5. COHERENT: grammatically sound, makes sense as a real answer a human coach would give.
+
+Question: {instruction}
+Answer: {response}
+
+Respond with ONLY valid JSON, no other text: {{"pass": true}} or {{"pass": false, "reason": "<short reason>"}}
+"""
+
+
+def judge_pair(pair: dict, model: str, client: httpx.Client) -> bool:
+    """Second-pass LLM judge with a strict rubric, catching shallow/generic/
+    off-topic pairs the fast heuristic filter can't detect."""
+    prompt = JUDGE_PROMPT.format(instruction=pair["instruction"], response=pair["response"])
+    try:
+        resp = client.post(
+            OLLAMA_URL,
+            json={"model": model, "prompt": prompt, "stream": False, "format": "json"},
+            timeout=60.0,
+        )
+        resp.raise_for_status()
+    except httpx.HTTPError as e:
+        print(f"  WARNING: judge request failed, rejecting pair: {e}", file=sys.stderr)
+        return False
+
+    raw = resp.json().get("response", "")
+    try:
+        verdict = json.loads(raw)
+    except json.JSONDecodeError:
+        print(f"  WARNING: judge did not return valid JSON, rejecting pair: {raw[:100]!r}", file=sys.stderr)
+        return False
+
+    return bool(verdict.get("pass", False))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--count", type=int, default=400)
@@ -110,6 +153,9 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT_PATH)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--dry-run", action="store_true", help="generate but don't write output")
+    parser.add_argument(
+        "--skip-judge", action="store_true", help="skip the second-pass LLM judge (fast_sanity_check only)"
+    )
     args = parser.parse_args()
 
     passages = load_passages(CORPUS_DIR)
@@ -134,6 +180,9 @@ def main() -> None:
             rejected += 1
             continue
         if not fast_sanity_check(pair):
+            rejected += 1
+            continue
+        if not args.skip_judge and not judge_pair(pair, args.model, client):
             rejected += 1
             continue
         accepted.append(pair)
