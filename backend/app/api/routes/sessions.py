@@ -195,7 +195,7 @@ async def end_session(
     )
 
 
-@router.delete("/{session_id}", status_code=204)
+@router.delete("/{session_id}", status_code=204, response_model=None)
 async def delete_session(
     row: SessionRow = Depends(owned_session), db: AsyncSession = Depends(get_db)
 ) -> None:

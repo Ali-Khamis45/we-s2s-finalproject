@@ -269,7 +269,7 @@ async def refresh(
     return result
 
 
-@router.post("/logout", status_code=204)
+@router.post("/logout", status_code=204, response_model=None)
 async def logout(
     request: Request, response: Response, db: AsyncSession = Depends(get_db)
 ) -> None:
@@ -284,7 +284,7 @@ async def logout(
     _clear_refresh_cookie(response)
 
 
-@router.post("/logout-all", status_code=204)
+@router.post("/logout-all", status_code=204, response_model=None)
 async def logout_all(
     response: Response,
     user: User = Depends(current_user),
@@ -318,7 +318,7 @@ async def update_me(
     return UserOut.model_validate(user)
 
 
-@router.post("/me/password", status_code=204)
+@router.post("/me/password", status_code=204, response_model=None)
 async def change_password(
     payload: PasswordChangeRequest,
     request: Request,
@@ -402,7 +402,7 @@ async def export_me(
     }
 
 
-@router.delete("/me", status_code=204)
+@router.delete("/me", status_code=204, response_model=None)
 async def delete_me(
     payload: DeleteAccountRequest,
     response: Response,
