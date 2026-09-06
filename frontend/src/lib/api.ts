@@ -33,8 +33,8 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
   });
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  let response = await send(path, init);
+async function sendWithRefresh(path: string, init?: RequestInit): Promise<Response> {
+  const response = await send(path, init);
 
   // Exactly one refresh and one retry, and only for an expired token. Retrying
   // on every 401 would loop when the refresh itself is dead; the server marks
@@ -47,29 +47,41 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       /* non-JSON body: treat as a hard 401 */
     }
     if (expired && (await refreshAccessToken())) {
-      response = await send(path, init);
+      return send(path, init);
     }
   }
+  return response;
+}
 
-  if (!response.ok) {
-    // Surface the server's own wording — it is written for the user, and
-    // replacing it with a generic string loses the "what happens next" half.
-    let message = `Request failed (${response.status})`;
-    let code = "http_error";
-    try {
-      const body = await response.json();
-      if (body?.error) {
-        message = body.error.message ?? message;
-        code = body.error.code ?? code;
-      }
-    } catch {
-      // Non-JSON error body; the status-based message stands.
+async function throwFromResponse(response: Response): Promise<never> {
+  // Surface the server's own wording — it is written for the user, and
+  // replacing it with a generic string loses the "what happens next" half.
+  let message = `Request failed (${response.status})`;
+  let code = "http_error";
+  try {
+    const body = await response.json();
+    if (body?.error) {
+      message = body.error.message ?? message;
+      code = body.error.code ?? code;
     }
-    throw new ApiError(message, code, response.status);
+  } catch {
+    // Non-JSON error body; the status-based message stands.
   }
+  throw new ApiError(message, code, response.status);
+}
 
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await sendWithRefresh(path, init);
+  if (!response.ok) await throwFromResponse(response);
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
+}
+
+/** Same auth and error handling as `request`, for a non-JSON body. */
+async function requestBinary(path: string): Promise<ArrayBuffer> {
+  const response = await sendWithRefresh(path, { headers: { Accept: "audio/wav" } });
+  if (!response.ok) await throwFromResponse(response);
+  return response.arrayBuffer();
 }
 
 export const auth = {
@@ -140,6 +152,10 @@ export const api = {
     request<{ files: number; chunks: number }>("/api/corpus/ingest", {
       method: "POST",
     }),
+
+  /** A coach reply as a WAV. The server takes the words from the stored turn. */
+  turnSpeech: (sessionId: string, turnId: number) =>
+    requestBinary(`/api/sessions/${sessionId}/turns/${turnId}/speech`),
 };
 
 /** Build a same-origin WebSocket URL, honouring https in deployment. */

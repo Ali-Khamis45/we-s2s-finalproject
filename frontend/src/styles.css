@@ -438,6 +438,68 @@
   border-radius: var(--r-full);
 }
 
+/* The replay control. Quiet at rest — the reply is already there to read —
+ * and amber only while sounding, which is the one moment a stored reply is
+ * genuinely the active voice. Amber is rationed for the live path everywhere
+ * else. */
+.replay {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  padding: 3px;
+  border: 1px solid transparent;
+  border-radius: var(--r-full);
+  background: none;
+  color: var(--muted);
+  font-size: var(--s-sm);
+  cursor: pointer;
+  transition:
+    color var(--t-fast) var(--e-out),
+    border-color var(--t-fast) var(--e-out);
+}
+
+.replay:hover:not(:disabled) {
+  color: var(--path-grounded, var(--sage));
+  border-color: var(--rule);
+}
+
+.replay:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.replay:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.replay-playing {
+  color: var(--orb);
+  border-color: color-mix(in srgb, var(--orb) 40%, transparent);
+}
+
+.replay-error {
+  color: var(--muted);
+  opacity: 0.55;
+}
+
+.replay-loading .replay-icon {
+  animation: replay-pulse 1.1s var(--e-out) infinite;
+}
+
+@keyframes replay-pulse {
+  50% { opacity: 0.35; }
+}
+
+/* Stopped, not merely shortened: a pulse that still moves is still motion. */
+@media (prefers-reduced-motion: reduce) {
+  .replay-loading .replay-icon {
+    animation: none;
+    opacity: 0.55;
+  }
+}
+
 .turn-ms {
   margin-left: auto;
   font-family: var(--f-mono);

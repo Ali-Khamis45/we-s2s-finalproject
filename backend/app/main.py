@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app import __version__
-from app.api.routes import auth, chat, corpus, health, knowledge, live, sessions
+from app.api.routes import auth, chat, corpus, health, knowledge, live, sessions, speech
 from app.core.config import settings
 from app.core.errors import register_error_handlers
 from app.core.logging import (
@@ -116,6 +116,7 @@ app.include_router(sessions.router)
 app.include_router(corpus.router)
 app.include_router(live.router)
 app.include_router(knowledge.router)
+app.include_router(speech.router)
 
 
 @app.get("/", include_in_schema=False)

@@ -2074,6 +2074,59 @@
         ]
       }
     },
+    "/api/sessions/{session_id}/turns/{turn_id}/speech": {
+      "get": {
+        "description": "Return the reply as a complete WAV.\n\nWhole-file rather than streamed: a replay is short and the caller wants a\nseekable buffer it can stop cleanly. A second streaming transport would buy\nnothing here.",
+        "operationId": "turn_speech_api_sessions__session_id__turns__turn_id__speech_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "turn_id",
+            "required": true,
+            "schema": {
+              "title": "Turn Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "audio/wav": {}
+            },
+            "description": "Spoken reply"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Turn Speech",
+        "tags": [
+          "speech"
+        ]
+      }
+    },
     "/api/status": {
       "get": {
         "description": "What the system can actually do right now.\n\nThe UI reads this on load to decide whether to offer the live coach, and it\nis the fastest way to see which half of the stack is up.",

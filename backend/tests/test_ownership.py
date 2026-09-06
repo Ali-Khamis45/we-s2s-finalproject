@@ -44,6 +44,9 @@ SESSION_SCOPED = [
     ("GET", "/api/sessions/{sid}/metrics"),
     ("POST", "/api/sessions/{sid}/end"),
     ("DELETE", "/api/sessions/{sid}"),
+    # Turn id 1 need not exist: an unowned session must 404 before the turn is
+    # ever looked up, so a "no such turn" answer here would still be a leak.
+    ("GET", "/api/sessions/{sid}/turns/1/speech"),
 ]
 
 

@@ -1,5 +1,6 @@
 ﻿import { useCallback, useEffect, useRef, useState } from "react";
 
+import * as replay from "../audio/replay";
 import { MicrophoneCapture } from "../audio/capture";
 import { StreamPlayer } from "../audio/player";
 import { api, wsUrl } from "../lib/api";
@@ -248,10 +249,16 @@ export function useCoachSession() {
         }
 
         case "done": {
+          const turnId = data.turn_id;
           finalizeCoach({
             timings: (data.timings ?? []) as StageTiming[],
             totalMs: Number(data.total_ms ?? 0),
             grounded: Boolean(data.grounded ?? true),
+            // Only now does the reply have a row to replay. A live turn can
+            // close without this frame, and then it simply has no button.
+            ...(typeof turnId === "number"
+              ? { turnId, sessionId: sessionRef.current ?? undefined }
+              : {}),
           });
           break;
         }
@@ -365,6 +372,7 @@ export function useCoachSession() {
 
   /** Start in the best mode the server currently offers. */
   const start = useCallback(async () => {
+    replay.stop();
     const current = status ?? (await refreshStatus());
     await connect(current?.live_available ? "live" : "knowledge");
   }, [connect, refreshStatus, status]);
@@ -377,6 +385,7 @@ export function useCoachSession() {
 
   const sendText = useCallback(
     async (text: string) => {
+      replay.stop();
       const trimmed = text.trim();
       if (!trimmed) return;
 
@@ -412,6 +421,8 @@ export function useCoachSession() {
           timings: body.timings ?? [],
           totalMs: body.total_ms,
           grounded: body.grounded,
+          turnId: body.turn_id,
+          sessionId: id,
         });
       } catch {
         setError("Couldn't reach the coach service.");
@@ -466,6 +477,8 @@ export function useCoachSession() {
               // that happened in the current page load.
               timings: t.timings ?? [],
               totalMs: t.total_ms ?? undefined,
+              turnId: t.id,
+              sessionId: detail.id,
             })),
         );
         pendingCoachRef.current = null;

@@ -86,6 +86,10 @@ export interface Message {
   timings?: StageTiming[];
   totalMs?: number;
   grounded?: boolean;
+  /** The persisted row. Absent while a turn is still streaming. */
+  turnId?: number;
+  /** Replay needs both halves of the path. */
+  sessionId?: string;
 }
 
 /** Human labels. The UI never shows a raw enum value. */

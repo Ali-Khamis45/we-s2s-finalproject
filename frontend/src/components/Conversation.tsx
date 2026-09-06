@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { Citation, Message, StageTiming } from "../lib/types";
 import { DysfluencyTimeline } from "./DysfluencyTimeline";
+import { ReplayButton } from "./ReplayButton";
 import { TurnTimings } from "./TurnTimings";
 
 interface Props {
@@ -54,6 +55,7 @@ export function Conversation({ messages, speaking }: Props) {
           key={m.id}
           message={m}
           index={i}
+          speaking={speaking}
           compareWith={m.role === "coach" ? counterpart(m.mode) : null}
         />
       ))}
@@ -73,13 +75,23 @@ export function Conversation({ messages, speaking }: Props) {
 function MessageBubble({
   message,
   index,
+  speaking,
   compareWith,
 }: {
   message: Message;
   index: number;
+  speaking: boolean;
   compareWith?: { label: string; timings: StageTiming[]; totalMs?: number } | null;
 }) {
   const isUser = message.role === "user";
+  // Only a finished, persisted coach turn has anything to play. A control that
+  // could never work is noise, so it is absent rather than disabled.
+  const canReplay =
+    !isUser &&
+    !message.pending &&
+    message.turnId != null &&
+    message.sessionId != null &&
+    message.text.trim().length > 0;
 
   return (
     <article
@@ -100,6 +112,13 @@ function MessageBubble({
             {Math.round(message.totalMs)} ms
           </span>
         ) : null}
+        {canReplay && (
+          <ReplayButton
+            sessionId={message.sessionId!}
+            turnId={message.turnId!}
+            speaking={speaking}
+          />
+        )}
       </header>
 
       <p className="turn-text">
