@@ -50,6 +50,10 @@ ml/finetuning/llama.cpp/*.exe
 ml/finetuning/llama.cpp/*.dll
 # M6: generated dataset (regenerated from the corpus, not source).
 data/finetuning/
+# M8: merged fp16 model (regenerated from the base model + adapter) and
+# GGUF conversion output.
+ml/finetuning/merged/
+ml/finetuning/gguf/
 
 # ---- Data ----
 # SEP-28k audio is fetched from source podcasts, never redistributed.
