@@ -35,6 +35,11 @@ faster-whisper==1.1.1
 
 # ---- TTS (A8) ----
 kokoro==0.3.4
+# Pinned because kokoro 0.3.4 asks for `misaki[en]>=0.6.5` with no upper bound,
+# and misaki 0.7+ renamed `misaki.en.MutableToken` to `MToken`. A fresh install
+# resolves misaki to latest, kokoro's `pipeline.py` fails at import, and the
+# coach silently loses its voice -- the app keeps working, just mute.
+misaki==0.6.7
 soundfile==0.12.1
 
 # ---- LLM serving (cascade, CPU via llama.cpp) ----
