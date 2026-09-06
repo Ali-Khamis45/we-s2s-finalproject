@@ -152,6 +152,18 @@ def download_episode(
     rewritten = rewrite_feedproxy_url(url)
     if rewritten is not None:
         url = rewritten
+    else:
+        # Some hosts (e.g. Blubrry) 302-redirect a plain http:// request to
+        # another plain http:// URL, and on networks that transparently
+        # intercept unencrypted HTTP (observed: an ISP captive-portal
+        # redirect on port 80), that second hop returns an HTML redirect
+        # page instead of the real file -- which downloads "successfully"
+        # and then fails ffmpeg decoding. Forcing https:// upfront avoids
+        # the interception entirely; every source host in this dataset
+        # serves https. Verified fix: StutterTalk (media.blubrry.com)
+        # episodes downloaded a redirect-page HTML instead of the mp3 over
+        # http, succeeded over https.
+        url = re.sub(r"^http://", "https://", url, count=1)
 
     ext = _audio_extension(url)
     last_error: Exception | None = None

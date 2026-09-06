@@ -133,6 +133,30 @@ def test_download_episode_does_not_retry_on_404(mock_get, mock_run, tmp_path: Pa
 
 @patch("download_sep28k.subprocess.run")
 @patch("download_sep28k.requests.get")
+def test_download_episode_upgrades_plain_http_url_to_https(mock_get, mock_run, tmp_path: Path) -> None:
+    # Real-run finding: Blubrry 302-redirects a plain http:// request to
+    # another plain http:// URL, and this network's ISP intercepts that
+    # second hop with a captive-portal HTML page instead of the real file --
+    # ffmpeg then fails to decode it. Forcing https upfront sidesteps the
+    # interception; every source host in this dataset serves https.
+    mock_get.return_value = _fake_response(200)
+    mock_run.side_effect = _fake_ffmpeg_run
+
+    result = download_episode(
+        _episode(url="http://media.blubrry.com/stuttertalk/stuttertalk.com/podcast/572StutterTalk.mp3"),
+        tmp_path,
+        retries=3,
+        timeout=30,
+    )
+
+    assert result.success
+    requested_url = mock_get.call_args.args[0]
+    assert requested_url.startswith("https://")
+    assert requested_url == "https://media.blubrry.com/stuttertalk/stuttertalk.com/podcast/572StutterTalk.mp3"
+
+
+@patch("download_sep28k.subprocess.run")
+@patch("download_sep28k.requests.get")
 def test_download_episode_uses_blubrry_rewrite_for_stuttering_is_cool_feedproxy(
     mock_get, mock_run, tmp_path: Path
 ) -> None:
