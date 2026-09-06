@@ -1,52 +1,24 @@
 # Acoustic Tag Schema (M5)
 
-The Track M (dysfluency analyzer) ↔ Track A (prompt engineering / A12) contract.
+**Superseded 2026-09-06.** The real, already-implemented M5 schema is
+`backend/app/schemas/acoustic.py` (`DysfluencyKind`, `DysfluencyEvent`,
+`ProsodyMetrics`, `AcousticProfile`) — richer than what this file originally
+proposed (timed events with confidence/duration, prosody metrics, and a
+`COACHING_HINT` mapping per event kind, not just a flat probability dict),
+and already wired into `backend/app/services/dysfluency.py`'s
+`Wav2VecBackend`.
 
-**Status:** Frozen 2026-09-06, as the de facto schema — matches M4's trained
-classifier output exactly, since both tracks are built by the same person
-on the same day ahead of the presentation deadline. No separate negotiation
-round was needed; this document exists so the contract is written down
-rather than implicit.
+This file was written from scratch while a real M5 contract already existed
+in the codebase — a duplication error, not a deliberate second schema. Read
+`backend/app/schemas/acoustic.py`'s module docstring and `DysfluencyKind`
+for the actual, binding contract between Track M and Track A.
 
-## Shape
-
-The dysfluency analyzer (`ml/dysfluency/inference.py`, `DysfluencyClassifier.predict()`)
-returns a flat dict of five class names to sigmoid probabilities in `[0, 1]`:
-
-```json
-{
-  "Block": 0.12,
-  "Prolongation": 0.87,
-  "SoundRep": 0.03,
-  "WordRep": 0.05,
-  "Interjection": 0.41
-}
-```
-
-- Keys are always present, in this order, spelled exactly as shown (matches
-  `ml.dysfluency.inference.LABEL_COLUMNS` and `ml.dysfluency.scripts.sep28k_manifest.LABEL_COLUMNS`).
-- Values are independent probabilities (multi-label, not mutually exclusive
-  — a clip can be both `Block` and `Interjection` at once).
-- No aggregation across clips is defined here — the analyzer scores one
-  ~3-second audio clip at a time. Any turn-level aggregation (e.g. "did
-  this utterance contain a block anywhere") is Track A's responsibility at
-  the prompt-assembly stage, not the analyzer's.
-
-## How Track A (A12) consumes this
-
-Prompt engineering injects acoustic tags as a short natural-language or
-structured summary alongside the transcript. A minimal injection convention:
-
-- Threshold each probability at `0.5` to decide whether to mention a tag at
-  all (avoids cluttering the prompt with near-zero scores).
-- Above threshold, surface the tag by its plain name (`Block`,
-  `Prolongation`, `SoundRep`, `WordRep`, `Interjection`) — these names are
-  stable across both tracks and should not be renamed or aliased in prompt
-  text without updating this file.
-- The exact prompt template/wording is A12's concern, not specified here.
-
-## Non-goals
-
-This schema does not cover: severity/intensity scoring (only presence
-probability), speaker diarization, or any acoustic feature beyond the five
-SEP-28k-derived dysfluency types M4 was trained on.
+**One real gap this duplication surfaced and fixed:** M4's training code
+(`train_classifier.py`) never set `id2label`/`label2id` to match
+`DysfluencyKind`'s values (`block`, `prolongation`, `sound_repetition`,
+`word_repetition`, `interjection`), so the trained checkpoint's config had
+generic `LABEL_0`..`LABEL_4` placeholders — `Wav2VecBackend` would have
+silently filtered out every prediction and fallen back to the heuristic
+analyzer. Fixed in the training code (now sets `id2label`/`label2id`
+correctly via `sep28k_manifest.DYSFLUENCY_KIND_BY_LABEL_COLUMN`) and patched
+directly into the existing checkpoint's `config.json`.
