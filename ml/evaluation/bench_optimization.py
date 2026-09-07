@@ -274,7 +274,17 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=8090, help="scratch port for TTFT")
     ap.add_argument("--out-dir", default=str(HERE / "results"))
     ap.add_argument("--skip-ttft", action="store_true")
+    ap.add_argument(
+        "--precisions", default="f16,Q4_K_M",
+        help="Comma-separated precisions to bench. Benching f16 on CPU is very "
+             "slow (5.9GB, memory-bandwidth-bound) and its throughput is not "
+             "what ships; pass 'Q4_K_M' alone when only the served variant "
+             "matters. Size and compression ratio are read from the file "
+             "regardless, so the f16 column survives either way.",
+    )
     args = ap.parse_args()
+
+    wanted = {p.strip() for p in args.precisions.split(",") if p.strip()}
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -294,6 +304,14 @@ def main() -> int:
             "size_mb": round(model.stat().st_size / 1048576, 1),
         }
         print(f"\n{label} ({row['size_mb']:,.0f} MB)")
+
+        if precision not in wanted:
+            # Size still counts — the compression ratio is the headline figure
+            # and comes from the file, not from a benchmark.
+            row["skipped"] = "not in --precisions"
+            print("  (size only — throughput not benched)")
+            rows.append(row)
+            continue
 
         print("  llama-bench…", flush=True)
         row.update(run_llama_bench(model, args.reps, args.threads))
