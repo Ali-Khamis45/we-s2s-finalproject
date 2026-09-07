@@ -386,7 +386,25 @@ async def handler(client) -> None:
     ssl_ctx.verify_mode = ssl.CERT_NONE  # local self-signed dev cert only
     log.info("client connected, dialing upstream %s", UPSTREAM_URL)
     try:
-        async with websockets.connect(UPSTREAM_URL, ssl=ssl_ctx, max_size=None) as upstream:
+        # No keepalive on the upstream leg. `websockets` defaults to a 20s ping
+        # timeout, and Moshi is GPU-bound: on an 8GB card with ~300MB of
+        # headroom it routinely stalls longer than that mid-session, so the
+        # library was killing a working connection and reporting
+        # "1011 keepalive ping timeout" — which surfaced as "the live coach
+        # dropped out" seconds into a conversation.
+        #
+        # A stalled Moshi is a real problem, but it is not a dead socket, and
+        # tearing down the session guarantees the stall becomes a failure. The
+        # session already ends when either pump task finishes, so a genuinely
+        # dead upstream is still detected.
+        async with websockets.connect(
+            UPSTREAM_URL,
+            ssl=ssl_ctx,
+            max_size=None,
+            ping_interval=None,
+            ping_timeout=None,
+            close_timeout=5,
+        ) as upstream:
             done, pending = await asyncio.wait(
                 [
                     asyncio.create_task(bridge_upstream_to_client(upstream, client)),
@@ -411,7 +429,18 @@ async def handler(client) -> None:
 
 
 async def main() -> None:
-    async with websockets.serve(handler, LISTEN_HOST, LISTEN_PORT, max_size=None):
+    # Same reasoning as the upstream leg: the backend sits on this side, and a
+    # ping timeout here would tear down a session that is merely waiting on a
+    # busy GPU rather than one that has actually gone away.
+    async with websockets.serve(
+        handler,
+        LISTEN_HOST,
+        LISTEN_PORT,
+        max_size=None,
+        ping_interval=None,
+        ping_timeout=None,
+        close_timeout=5,
+    ):
         print(f"bridge listening on ws://{LISTEN_HOST}:{LISTEN_PORT}/api/chat")
         await asyncio.Future()
 
