@@ -174,6 +174,33 @@ describe("barge-in", () => {
   });
 });
 
+describe("speaking indicator", () => {
+  it("stays true between chunks, while a source is momentarily absent", () => {
+    // The bug this pins: `isPlaying` used to require `sources.size > 0`, but
+    // sources are dropped in their own `onended`. Between one sentence ending
+    // and the next arriving the set is empty even though the coach is still
+    // mid-reply, so the "Coach is speaking" hint flickered on and off — and
+    // barge-in stopped watching for exactly that window.
+    const player = new StreamPlayer(24_000);
+    player.enqueue(chunk(1));
+
+    const source = audio().sources[0];
+    audio().currentTime = source.startedAt! + 0.5; // half way through
+    source.onended?.(); // browser drops it early; audio still scheduled
+
+    expect(player.isPlaying).toBe(true);
+  });
+
+  it("goes false once the scheduled audio has actually finished", () => {
+    const player = new StreamPlayer(24_000);
+    player.enqueue(chunk(1));
+
+    audio().currentTime = player.queuedSeconds + audio().currentTime + 0.01;
+
+    expect(player.isPlaying).toBe(false);
+  });
+});
+
 describe("queue reporting", () => {
   it("reports buffered audio ahead of the clock", () => {
     const player = new StreamPlayer(24_000);
