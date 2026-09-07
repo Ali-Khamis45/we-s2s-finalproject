@@ -58,6 +58,30 @@ preprocessing step.
 
 `peft` is installed; the `moshi` PyTorch package is not.
 
+### 2a. A dependency trap found while attempting this (2026-09-07)
+
+`pip install moshi` into `ml/.venv` **silently broke GPU support** and had to be
+reverted. It is worth recording because anyone retrying this will hit it:
+
+- `moshi` 0.2.13 pins `torch<2.10`. This project runs **torch 2.11.0+cu128**,
+  needed for Blackwell/`sm_120`.
+- pip resolved that pin by installing **`torch 2.9.1+cpu`** — a CPU-only build.
+  `torch.cuda.is_available()` went from `True` to `False`, silently. Nothing
+  errored; the GPU simply disappeared from the environment.
+- It also downgraded `numpy` 2.5.2 → 2.2.6 and `aiohttp`.
+
+Recovery: force-reinstall `torch==2.11.0` from the `cu128` index, uninstall
+`moshi`, then verify — `torch.cuda.is_available()` is `True` again, and M4's
+classifier still returns sane predictions. The environment was checked working,
+not merely reinstalled.
+
+**The useful finding underneath the trap:** `torch 2.9.1+cu128` *does* exist on
+the PyTorch CUDA 12.8 index, and it satisfies moshi's `<2.10` pin. So the
+conflict is a pip *default-index* artifact, not a real Blackwell
+incompatibility — this blocker is softer than it first appeared. The correct
+setup is a **separate venv** (`ml/moshi/.venv-train`) with
+`torch==2.9.1+cu128`, so the working `ml/.venv` is never at risk.
+
 ### 3. 8 GB VRAM is tight for a 7B backbone plus depth transformer
 
 The card is an RTX 5050 Laptop (8151 MiB total, ~1.2 GB already resident).
