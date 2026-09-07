@@ -44,6 +44,19 @@ Fine-tuning needs the bf16 PyTorch release, which is a **fresh multi-GB
 download**. M3 already hit a disk-space near-miss on this box, so this is a
 real cost rather than a footnote.
 
+**Confirmed by inspection (2026-09-07), not inferred.** With `moshi` installed,
+`moshi.models.loaders.DEFAULT_REPO` is **`kyutai/moshiko-pytorch-bf16`** — a
+different repository from the cached `kyutai/moshiko-candle-q8`. The HF cache
+on this machine holds only:
+
+```text
+models--kyutai--moshi-artifacts      (2.2 MB)
+models--kyutai--moshiko-candle-q8    (8.0 GB)
+```
+
+So the trainable checkpoint is genuinely absent, and the "wrong artifact"
+blocker above is a verified fact rather than a reasonable guess.
+
 ### 2. No training pipeline exists, and M7's does not transfer
 
 M7 fine-tuned Qwen with `trl` over 400 **text** pairs — a solved, well-trodden
@@ -148,20 +161,65 @@ delivery, not a capability unlock.
 
 ---
 
+## Outcome of the 2026-09-07 attempt
+
+M11 was attempted after M9/M10/M12 were complete, as stretch work. It stopped
+at the environment, not at the modelling. What was achieved and what blocked:
+
+**Achieved:**
+
+- Isolated training venv at `ml/moshi/.venv-train` (gitignored), with `moshi`
+  0.2.13 and `peft` 0.20.0 installed.
+- The dependency trap above found, documented, and safely contained — the
+  second occurrence damaged only the throwaway venv, and `ml/.venv` was
+  verified still working (torch 2.11.0+cu128, CUDA available, M4 classifier
+  returning sane predictions).
+- Blocker #1 upgraded from *assumed* to *verified*: the trainable checkpoint is
+  `kyutai/moshiko-pytorch-bf16` and is genuinely not on this machine.
+- `ml/moshi/probe_lora_feasibility.py` written and committed — it answers the
+  VRAM question in one run whenever the environment is ready.
+
+**Blocked on:** getting a CUDA-capable torch into the training venv. Three
+attempts, each defeated by the network rather than by anything conceptual: two
+silent CPU-wheel substitutions (documented above) and finally a read timeout
+from `download-r2.pytorch.org` partway through the 2.25 GB `cu128` wheel. One
+self-inflicted round trip is also recorded honestly: a wheel copied out of
+pip's *unpack* directory while pip was still writing it was truncated, and pip
+correctly rejected it.
+
+**Cost/benefit at the stopping point.** Even with the environment finished,
+the ~15 GB bf16 checkpoint download and the paired-audio dataset (step 3 below)
+remain — and the same link just failed on 2.25 GB. M11 is optional in the plan;
+M9, M10 and M12 are required and are complete. Continuing would have traded
+certain progress on required work for uncertain progress on a stretch goal.
+
+**The honest verdict:** the hardware question is still *unanswered*, not
+answered negatively. Nothing found here says M11 is impossible on this GPU —
+the probe exists precisely to settle that, and it is one command away from a
+verdict once a CUDA torch lands in the training venv.
+
 ## What it would take, concretely
 
 If picked up later, in order:
 
-1. Download the bf16 PyTorch Moshi release; confirm free disk first.
-2. Install the `moshi` PyTorch package and confirm a forward pass on this GPU.
+0. **Finish the training venv** — it exists but has a CPU-only torch. Install
+   `torch==2.9.1` from the `cu128` index with `--no-deps` (see the trap above),
+   on a connection that can hold a 2.25 GB download, then **verify
+   `torch.cuda.is_available()`**.
+1. **Run `ml/moshi/probe_lora_feasibility.py`.** It loads the checkpoint,
+   attaches LoRA, runs one forward+backward and reports peak VRAM. Do this
+   *before* any dataset work — if it OOMs, no dataset makes M11 possible here.
+   Note it will trigger step 2's download on first run.
+2. Download the bf16 PyTorch release (`kyutai/moshiko-pytorch-bf16`, ~15 GB);
+   confirm free disk first — 112 GB was free at time of writing.
 3. Build a paired coaching-audio dataset and encode it through Mimi to RVQ
    codebooks. **This is the long pole** — plan it as its own task with its own
    quality gate, the way M6 had one.
 4. LoRA-adapt the backbone (temporal transformer first; the depth transformer
    is smaller and may not need adapting).
 5. Build a speech-output evaluation harness before training anything, so the
-   result can be judged. Without step 5, steps 1–4 produce an unfalsifiable
-   claim.
+   result can be judged. Without it, everything above produces an
+   unfalsifiable claim — this is the blocker that matters most.
 
 Estimated at 2–4 focused sessions with a genuine risk of ending with no
 trainable artifact — which is why it ran after the required work, not before.
