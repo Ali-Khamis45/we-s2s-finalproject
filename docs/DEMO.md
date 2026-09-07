@@ -132,8 +132,10 @@ Then show the consequence, which is the part that lands:
 > is the same either way; the trained model drops in behind it.
 
 **Verified figure to quote:** against a 1400 ms block spliced into real speech,
-the analyzer measured **1480 ms**, located within 105 ms. Whisper's transcript
-contained no trace of it.
+the analyzer measured **1500 ms**, located within 145 ms. Whisper's transcript
+contained no trace of it. The word audio is re-synthesized on every run, so
+quote it as "within about a hundred milliseconds" rather than to the
+millisecond.
 
 ---
 
@@ -158,9 +160,12 @@ The coach declines and cites nothing.
 > That refusal is deliberate and it was harder to get right than the answer.
 > These embeddings have a high similarity floor — that diesel question still
 > scores 0.48 against a speech-coaching corpus, and the capital of Mongolia
-> scores 0.35. Our first threshold was 0.28, which let everything through. We
-> measured the real distribution and set the gate at 0.55. Being unhelpful
-> about a technique is much better than being confidently wrong about one.
+> scores 0.35. Our first threshold was 0.28, which let everything through. Our
+> second was 0.55, derived from a three-document fixture — against the real
+> 1,057-chunk corpus that would have answered three of the eight questions it
+> should have refused. We re-measured over the real corpus and set the gate at
+> 0.65. Being unhelpful about a technique is much better than being confidently
+> wrong about one.
 
 Examiners reward a team that can name a bug they found in their own system.
 
