@@ -53,6 +53,9 @@ ml/finetuning/adapters/
 # does not silently reintroduce untracked noise.
 ml/finetuning/llama.cpp/*
 !ml/finetuning/llama.cpp/README.md
+# The CUDA 13.3 build used for GPU serving (see docs/DEMO_RUNBOOK.md). Same
+# reason as the CPU build above: prebuilt binaries, regenerable by re-download.
+ml/finetuning/llama-cu133/
 # M6: generated dataset (regenerated from the corpus, not source).
 data/finetuning/
 # M8: merged fp16 model (regenerated from the base model + adapter) and
