@@ -12,7 +12,10 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.db.models import Base
+
+log = get_logger(__name__)
 
 engine = create_async_engine(
     settings.database_url,
@@ -33,7 +36,24 @@ async def init_db() -> None:
 
 
 async def dispose_db() -> None:
-    await engine.dispose()
+    """Best-effort cleanup on the way out.
+
+    Shutdown must not raise. By the time this runs the loop may already be
+    closing — Starlette's TestClient tears its anyio portal down before the
+    lifespan finishes, and aiosqlite then cannot close its connections. There
+    is nothing left to dispose in that case, and turning a clean exit into a
+    failure served nobody: it made the whole backend suite exit non-zero with
+    every test passing.
+
+    Narrow on purpose. Only the closed-loop case is tolerated; a real disposal
+    fault still propagates.
+    """
+    try:
+        await engine.dispose()
+    except RuntimeError as exc:
+        if "event loop is closed" not in str(exc).lower():
+            raise
+        log.debug("engine disposal skipped: the loop had already closed")
 
 
 async def get_db() -> AsyncIterator[AsyncSession]:

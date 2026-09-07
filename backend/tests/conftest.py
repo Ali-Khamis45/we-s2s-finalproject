@@ -35,9 +35,30 @@ from app.main import app  # noqa: E402
 
 @pytest.fixture(scope="session")
 def client() -> Iterator[TestClient]:
-    """A client with the app's lifespan run, so the schema exists."""
-    with TestClient(app) as c:
+    """A client with the app's lifespan run, so the schema exists.
+
+    The shutdown half is best-effort. TestClient drives the lifespan through an
+    anyio blocking portal, and pytest-asyncio closes its own loops as async
+    tests finish; by the time this session-scoped fixture unwinds, the portal's
+    loop can already be gone and `wait_shutdown` raises "Event loop is closed".
+
+    Every test has passed by then and the process is about to exit, so the only
+    thing that error achieved was making the suite exit non-zero — it appeared
+    the moment the first async tests were added, and it landed on whichever
+    test happened to run last, which made it look like that test's fault.
+
+    Narrow on purpose: only the closed-loop message is swallowed.
+    """
+    c = TestClient(app)
+    c.__enter__()
+    try:
         yield c
+    finally:
+        try:
+            c.__exit__(None, None, None)
+        except RuntimeError as exc:
+            if "event loop is closed" not in str(exc).lower():
+                raise
 
 
 _counter = itertools.count()

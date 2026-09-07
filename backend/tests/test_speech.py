@@ -9,8 +9,10 @@ the way the reply sounded when it was produced, not at a flat default.
 
 from __future__ import annotations
 
-import asyncio
+import json
+import sqlite3
 import struct
+from datetime import datetime, timezone
 from typing import Any
 
 import numpy as np
@@ -30,25 +32,33 @@ def seed_turn(
 
     Direct insertion rather than POST /api/chat: a turn is all these tests
     need, and the chat route would require a served model.
+
+    Plain sqlite3 rather than the app's async session. `asyncio.run()` closes
+    the loop it creates, and SQLAlchemy's aiosqlite pool binds connections to
+    the loop they were opened on — reusing that pool afterwards raises
+    "Event loop is closed". Writing synchronously touches no loop and no pool,
+    so this helper cannot disturb whichever test runs next.
     """
-    from app.db.models import Turn
-    from app.db.session import SessionLocal
+    from app.core.config import settings
 
-    async def go() -> int:
-        async with SessionLocal() as db:
-            row = Turn(
-                session_id=session_id,
-                role=role,
-                mode="knowledge",
-                text=text,
-                acoustic=acoustic,
-            )
-            db.add(row)
-            await db.commit()
-            await db.refresh(row)
-            return row.id
+    path = settings.database_url.split("///", 1)[1]
+    now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat(sep=" ")
 
-    return asyncio.run(go())
+    with sqlite3.connect(path) as conn:
+        cur = conn.execute(
+            "INSERT INTO turns (session_id, created_at, role, mode, text, acoustic)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                session_id,
+                now,
+                role,
+                "knowledge",
+                text,
+                json.dumps(acoustic) if acoustic is not None else None,
+            ),
+        )
+        conn.commit()
+        return int(cur.lastrowid)
 
 
 @pytest.fixture(autouse=True)
