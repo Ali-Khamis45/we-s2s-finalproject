@@ -244,9 +244,14 @@ so you do not accidentally undo that under questioning.
 | **User study** | None. Everything reported is technical measurement. | Slide 25 |
 | **Docker compose, CI badges** | Planned, do not exist. The README says so explicitly. | Not claimed anywhere in the deck |
 
-### Where the repository contradicts itself
+### Figures the repository contradicted itself on — now corrected
 
-| Conflict | What is current | What is stale |
+All of these were found while building this deck and fixed in the repository on
+2026-09-07 (commit `3901531`). The deck already carried the measured value; the
+documents now agree with it. Kept here so you can answer if an examiner is
+holding an older copy of the report.
+
+| Conflict | What it says now | What it said before |
 |---|---|---|
 | **Moshi latency** | p50 2009.9 ms / p95 2645.0 ms through the M2 production bridge (`PROJECT_PLAN.md` row M2). `PROJECT_PLAN.md` instructs in our own words not to quote ~200 ms. | `Readme.md` and `docs/REPORT.md` say "~200 ms" in several places. That is Kyutai's published figure, never measured here. |
 | **Cascade latency** | ~10–28 s warm (`Readme.md`), broken down in `REPORT.md` §9.3 as 9.8 s / ~15 s / ~21 s | `REPORT.md` §3 and §10.7 still quote "~1.9 s", which was measured on a 0.5B stand-in and contradicts §9.3 in the same document |
@@ -254,8 +259,14 @@ so you do not accidentally undo that under questioning.
 | **Test counts** | 92 backend, 42 frontend (`FIX_LOG.md` verification run, 2026-09-07) | `Readme.md` says 80 backend, 41 frontend |
 | **Moshi weight variant** | q8 — no q4 config ships upstream (`M1_BRINGUP_LOG.md`) | `Readme.md` says "Moshi 7B q4" |
 | **Retrieval gate** | 0.65 (`config.py`, `calibrate_gate.py` section of `backend/scripts/README.md`) | The `verify_retrieval.py` section of `backend/scripts/README.md` still says "the gate now sits at 0.55" |
-| **Whisper model in prose** | `base` (`config.py`, benchmarks) | `services/stt.py`'s module docstring still describes `small` at "150–300 ms" |
-| **Acoustic tag schema** | `backend/app/schemas/acoustic.py` is the binding contract | `docs/ACOUSTIC_TAG_SCHEMA.md` is superseded and says so at the top |
+| **Whisper model in prose** | `base`, ~600 ms p50 | `services/stt.py`'s module docstring described `small` at "150–300 ms" |
+| **The demo script** | `docs/DEMO.md` now has the presenter say the measured figures out loud | it said "~200 ms" and "about 1.9 seconds" |
+| **REPORT §11.1** | "the live path is measured but not yet compared" — M12 is what is outstanding | "the live path is unproven", which understated M1 and M2 |
+| **Acoustic tag schema** | `backend/app/schemas/acoustic.py` is the binding contract | `docs/ACOUSTIC_TAG_SCHEMA.md` is superseded and says so at the top — unchanged, it already declares this |
+
+`docs/PROJECT_PLAN.md` was deliberately left alone. Its structure is an original
+claim followed by a dated correction, and that is the record of how the error
+was found — editing it would erase the evidence.
 
 ### Machine-dependent, not repository defects
 
