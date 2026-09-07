@@ -24,6 +24,7 @@ Client protocol
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 import time
@@ -276,6 +277,28 @@ async def _respond(
         spoken_upto = 0
         reply_parts: list[str] = []
 
+        # Synthesis runs in its own task, fed by a queue, instead of inline in
+        # the token loop. Awaiting _speak() there stopped the loop consuming
+        # tokens for the duration of synthesis (~1-2s per sentence), so
+        # generation and speech took turns rather than overlapping: audio
+        # arrived in bursts with dead air between them. Kokoro is fast enough
+        # to keep ahead of playback -- it just has to be allowed to run while
+        # the model is still talking.
+        speech_queue: asyncio.Queue[str | None] | None = None
+        speech_task: asyncio.Task[None] | None = None
+
+        if speak:
+            speech_queue = asyncio.Queue()
+
+            async def _speech_worker(queue: asyncio.Queue[str | None]) -> None:
+                while True:
+                    chunk = await queue.get()
+                    if chunk is None:
+                        return
+                    await _speak(websocket, chunk, speech_rate)
+
+            speech_task = asyncio.create_task(_speech_worker(speech_queue))
+
         try:
             async for delta in llm_service.stream(bundle.messages):
                 if ttft_ms is None:
@@ -289,13 +312,20 @@ async def _respond(
                     {"role": Role.COACH.value, "text": delta, "final": False},
                 )
 
-                if speak:
-                    ready = _next_sentence("".join(reply_parts), spoken_upto)
-                    if ready is not None:
+                if speech_queue is not None:
+                    # Drain every completed sentence, not just one per token:
+                    # a single delta can close more than one.
+                    while (
+                        ready := _next_sentence("".join(reply_parts), spoken_upto)
+                    ) is not None:
                         chunk, spoken_upto = ready
-                        await _speak(websocket, chunk, speech_rate)
+                        speech_queue.put_nowait(chunk)
 
         except AppError as exc:
+            if speech_queue is not None:
+                speech_queue.put_nowait(None)
+            if speech_task is not None:
+                await speech_task
             await _send_json(
                 websocket, "error", {"message": exc.message, "code": exc.code}
             )
@@ -304,8 +334,15 @@ async def _respond(
         timer.mark("llm", t0)
         reply = "".join(reply_parts).strip()
 
-        if speak and reply[spoken_upto:].strip():
-            await _speak(websocket, reply[spoken_upto:].strip(), speech_rate)
+        if speech_queue is not None:
+            tail = reply[spoken_upto:].strip()
+            if tail:
+                speech_queue.put_nowait(tail)
+            speech_queue.put_nowait(None)
+
+        # The reply is not "done" until its audio has actually been sent.
+        if speech_task is not None:
+            await speech_task
 
         if not reply:
             reply = "I didn't catch that — could you say it again?"
@@ -349,10 +386,16 @@ def _next_sentence(text: str, already_spoken: int) -> tuple[str, int] | None:
     if not pending:
         return None
 
+    # The FIRST boundary, not the last. Scanning to the end and keeping the
+    # final match meant that once several sentences had accumulated they were
+    # returned as one block -- so nothing was spoken until the model paused,
+    # and then a single long chunk arrived at once. That is the opposite of
+    # streaming, and it is what made playback start ~20s in and stutter.
     cut = -1
     for i, ch in enumerate(pending):
         if ch in ".!?" and i + 1 < len(pending) and pending[i + 1] in " \n":
             cut = i + 1
+            break
     if cut < 0:
         return None
 
