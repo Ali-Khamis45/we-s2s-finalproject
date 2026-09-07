@@ -125,7 +125,8 @@ class TestTokens:
             decode_access_token(forged)
 
     def test_refresh_rotates_and_the_old_token_stops_working(self, client: TestClient):
-        acct = make_account(client)
+        # Registers the account and sets the refresh cookie read below.
+        make_account(client)
         first = client.cookies.get("scc_refresh")
         assert first
 
@@ -207,7 +208,6 @@ class TestPasswordChange:
 class TestAccountDeletion:
     def test_delete_removes_every_row(self, client: TestClient):
         """Erasure means erasure — no is_deleted flag, no orphaned transcripts."""
-        import anyio
         from sqlalchemy import func, select
 
         from app.db.models import RefreshToken, Session, Turn, User, WsTicket
