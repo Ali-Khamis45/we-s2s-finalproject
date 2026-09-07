@@ -82,6 +82,26 @@ incompatibility — this blocker is softer than it first appeared. The correct
 setup is a **separate venv** (`ml/moshi/.venv-train`) with
 `torch==2.9.1+cu128`, so the working `ml/.venv` is never at risk.
 
+**It bites a second time if you install in the wrong order.** Installing
+`torch==2.9.1+cu128` first and *then* `moshi` does not work: pip re-resolves
+torch while satisfying moshi's dependencies and silently swaps the CUDA build
+for the CPU wheel from PyPI. The venv ends up with `2.9.1+cpu` again, and again
+nothing errors.
+
+The order that works:
+
+```bash
+python -m venv ml/moshi/.venv-train
+ml/moshi/.venv-train/Scripts/python.exe -m pip install moshi
+# then put the CUDA build back, and stop pip re-resolving it away:
+ml/moshi/.venv-train/Scripts/python.exe -m pip install --force-reinstall --no-deps \
+    torch==2.9.1 --index-url https://download.pytorch.org/whl/cu128
+```
+
+`--no-deps` is the load-bearing flag. **Always verify with
+`torch.cuda.is_available()` afterwards** — this failure mode is silent in both
+directions, and an install that "succeeded" with exit code 0 tells you nothing.
+
 ### 3. 8 GB VRAM is tight for a 7B backbone plus depth transformer
 
 The card is an RTX 5050 Laptop (8151 MiB total, ~1.2 GB already resident).
