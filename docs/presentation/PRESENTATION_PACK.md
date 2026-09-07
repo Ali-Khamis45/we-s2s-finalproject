@@ -1,6 +1,6 @@
 # Speech Confidence Coach — defence pack
 
-Companion to `Speech-Confidence-Coach.pptx`. 26 core slides, 14 appendix slides,
+Companion to `Speech-Confidence-Coach.pptx`. 27 core slides, 16 appendix slides,
 30 minutes, two presenters.
 
 Full speaker scripts live in the deck's own speaker-notes pane — one per slide,
@@ -9,11 +9,11 @@ backup, and the transition line. This document is everything around them.
 
 | | |
 |---|---|
-| **Deck** | `Speech-Confidence-Coach.pptx` — 40 slides, 4:3-safe 16:9 (13.33″ × 7.5″) |
-| **Core talk** | slides 1–26, exactly 30:00 |
-| **Appendix** | slides A1–A14, not part of the 30 minutes |
+| **Deck** | `Speech-Confidence-Coach.pptx` — 43 slides, 16:9 (13.33″ × 7.5″) |
+| **Core talk** | slides 1–27, exactly 30:00 |
+| **Appendix** | slides A1–A16, not part of the 30 minutes |
 | **Presenter 1** | Ali — slides 1–13, light mode, 14:45 |
-| **Presenter 2** | Youssef — slides 13–26, Night Studio, 15:15 |
+| **Presenter 2** | Youssef — slides 13–27, Night Studio, 15:15 |
 | **Repository** | github.com/Ali-Khamis45/we-s2s-finalproject |
 
 ---
@@ -83,27 +83,28 @@ Theme column: **L** = light, **D** = Night Studio, **L→D** = the dissolve.
 
 | # | Title | Who | Theme | Time | Purpose | Visual composition | Build / animation |
 |---|---|---|---|---|---|---|---|
-| 14 | From microphone to *intelligence* | P2 | D | 0:45 | Reset attention on the speaker change; lay out the route | Statement of intent, then eight stage cards | Cards in two rows of four |
-| 15 | Moshi runs. And it is **ten times slower** than we claimed. | P2 | D | 1:20 | Correct the project's own headline number, on our terms | Four-bar latency ladder on one scale; our plan's own instruction quoted beside it; three framing notes | Bars top-down — published figure, M1, M2 p50, M2 p95 — then the quote |
-| 16 | Whisper base, int8, on CPU | P2 | D | 1:10 | Show the STT choice has downstream consequences | What the transcript object carries / why timings matter; the four thresholds with reasoning | Two cards, then the threshold band |
-| 17 | Two backends behind one interface | P2 | D | 1:20 | The trained classifier as a measured deliverable, kept distinct from the heuristic | Heuristic card / wav2vec2 card; per-class F1 bars in the app's event colours | Heuristic, then wav2vec2, then the bars growing left to right |
-| 18 | Look it up first, then answer | P2 | D | 1:20 | Teach RAG intuitively, then ground it in this pipeline | Five-step pipeline with arrows; three "why" cards beneath | **Progressive:** steps 01→05 one click each, then the three why cards together |
-| 19 | We got this threshold wrong *twice* | P2 | D | 1:25 | Refusal as a designed safety property, with the calibration story | Similarity axis 0.30–0.90; out-of-corpus band red, in-corpus band sage, the 0.077 gap between, threshold marker at 0.65 | **Four clicks:** axis → out-of-corpus band → in-corpus band → the 0.65 marker dropping into the gap |
-| 20 | Train in the cloud at 16-bit. Serve on a laptop at **4-bit**. | P2 | D | 1:20 | Fine-tuning and quantization as one deployment chain | Four-stage chain; size bars f16 vs Q4_K_M; the bitsandbytes argument | Chain left to right, then the size bars |
-| 21 | Eight gigabytes, and the flagship wants **all of it** | P2 | D | 1:05 | The constraint that explains every placement decision | A VRAM bar almost entirely full; the CPU list beside it; the trade stated | The bar filling to 7.7 GB is the moment |
-| 22 | Practice transcripts are personal | P2 | D | 1:10 | Turn a security checklist into one argument | Three columns: FastAPI reasoning, the two-token design, the remaining surface | Column by column |
-| 23 | Our estimates were wrong twice, in the **same direction** | P2 | D | 1:15 | Latency as measurement replacing assumption | Waterfall of five turn types on one 30-second axis; the two optimizations; 50 s → ~15 s | Bars top-down. The live-path bar first, for contrast. |
-| 24 | What we measured, and what broke when we checked | P2 | D | 1:10 | Engineering discipline through two real defects | Four counters; two defects as symptom → resolution | Counters, then defect 1, then defect 2 |
-| 25 | What is built, and what is *not* | P2 | D | 1:00 | An unmissable line between complete and planned work | Sage column (done) and amber column (not done), side by side | Left column, then right column. Do not rush the right column. |
-| 26 | Speech AI should not only understand *what* was said | P2 | D | 0:40 | Close the argument; hand to questions | The thesis large; three closing findings; Questions placed quietly | Statement, then the three cards |
+| 14 | From microphone to *intelligence* | P2 | D | 0:40 | Reset attention on the speaker change; lay out the route | Statement of intent, then eight stage cards | Cards in two rows of four |
+| 15 | Moshi runs. And it is **ten times slower** than we claimed. | P2 | D | 1:15 | Correct the project's own headline number, on our terms | Four-bar latency ladder on one scale; our plan's own instruction quoted beside it; three framing notes | Bars top-down — published figure, M1, M2 p50, M2 p95 — then the quote |
+| 16 | Whisper base, int8, on CPU | P2 | D | 1:00 | Show the STT choice has downstream consequences | What the transcript carries / why timings matter; the four thresholds | Two cards, then the threshold band |
+| 17 | Two backends behind one interface | P2 | D | 1:15 | The trained classifier as a measured deliverable, kept distinct from the heuristic | Heuristic card / wav2vec2 card; per-class F1 bars in the app's event colours | Heuristic, then wav2vec2, then the bars growing left to right |
+| 18 | Look it up first, then answer | P2 | D | 1:10 | Teach RAG intuitively, then ground it in this pipeline | Five-step pipeline; three "why" cards beneath | **Progressive:** steps 01→05, then the why cards together |
+| 19 | We got this threshold wrong *twice* | P2 | D | 1:20 | Refusal as a designed safety property, with the calibration story | Similarity axis with both question sets as bands, the 0.077 gap, the marker at 0.65 | **Four clicks:** axis → out-of-corpus band → in-corpus band → the marker dropping into the gap |
+| 20 | Train in the cloud at 16-bit. Serve on a laptop at **4-bit**. | P2 | D | 1:10 | Fine-tuning and quantization as one deployment chain | Four-stage chain; size bars f16 vs Q4_K_M; the bitsandbytes argument | Chain left to right, then the size bars |
+| 21 | The fine-tune improved style and **regressed safety** | P2 | D | 1:25 | **The required comparison, delivered as a real result including the regression** | Six checks with base, tuned and a two-way delta bar; the re-scoring beside it; what it does, why, what follows | Style rows first, then the two safety rows, then the re-scoring card. Let the two red rows land. |
+| 22 | Two modes, **one 8 GB card** | P2 | D | 1:00 | The constraint that explains placement — and M12's correction to our own framing | A VRAM bar almost entirely full, the CPU stack beside it, the finding underneath | The bar filling to 7.7 GB is the moment |
+| 23 | Practice transcripts are personal | P2 | D | 1:00 | Turn a security checklist into one argument | Three columns: FastAPI, the two-token design, the remaining surface | Column by column |
+| 24 | The biggest number in this project was a **build flag** | P2 | D | 1:20 | The largest measured effect, and the trap that hid it | Three serving builds as bars on one scale; the CUDA 12.4 trap; the conditional conclusion | CPU bar, then CUDA 12.4 (note it is *longer*), then 13.3 |
+| 25 | What we measured, and what broke when we checked | P2 | D | 1:00 | Engineering discipline through two real defects | Four counters, then two defects as symptom → resolution | Counters, then defect 1, then defect 2 |
+| 26 | What is built, and what is *not* | P2 | D | 0:55 | An unmissable line between complete and outstanding work | Sage column (done) and amber column (outstanding), side by side | Left column, then right. Do not rush the right column. |
+| 27 | Speech AI should not only understand *what* was said | P2 | D | 0:30 | Close the argument; hand to questions | The thesis large; three closing findings; Questions placed quietly | Statement, then the three cards |
 
-### Appendix — A1 to A14, on demand
+### Appendix — A1 to A16, on demand
 
 | # | Title | Use it when |
 |---|---|---|
 | A1 | Technology decision matrix, part 1 | "Justify your whole stack" |
 | A2 | Decision matrix, part 2 | as above |
-| A3 | API surface and the generated contract (25 paths, 30 operations, 2 sockets) | "How big is the backend, and how do you stop the frontend drifting?" |
+| A3 | API surface and the generated contract | "How big is the backend, and how do you stop the frontend drifting?" |
 | A4 | Persistence schema | "What exactly do you store?" |
 | A5 | Refresh rotation and reuse detection | "Walk me through authentication" |
 | A6 | WebSocket protocol | "How does a turn actually travel?" |
@@ -112,11 +113,11 @@ Theme column: **L** = light, **D** = Night Studio, **L→D** = the dissolve.
 | A9 | Demoting drills instead of deleting them | "Give me an example of a non-obvious fix" |
 | A10 | Benchmark methodology | "Why is your test fixture synthetic?" |
 | A11 | Hardware budget | "Why is everything on CPU?" |
-| A12 | Model selection, side by side | "Compare your model options" |
+| A12 | **M9 in full — all eleven checks, base vs fine-tuned** | anything about the comparison or the regression |
 | A13 | Testing matrix, and the ethics boundary | "How do you know it works?" / "Is this medical?" |
-| A14 | Anticipated questions | Your own cheat sheet — 18 questions with one-line answers |
-
----
+| A14 | Anticipated questions | your own cheat sheet — 18 questions with one-line answers |
+| A15 | **M12 — the comparison on three axes** | "What did the headline comparison actually find?" |
+| A16 | **Latency, stage by stage** | "Where does the time go?" / the two prompt optimizations |
 
 ## 3 · Timing table, with the arithmetic
 
@@ -131,12 +132,12 @@ Theme column: **L** = light, **D** = Night Studio, **L→D** = the dissolve.
 
 ### Presenter 2 — Night Studio
 
-| Slide | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Seconds | 15 | 45 | 80 | 70 | 80 | 80 | 85 | 80 | 65 | 70 | 75 | 70 | 60 | 40 |
-| Running | 15:00 | 15:45 | 17:05 | 18:15 | 19:35 | 20:55 | 22:20 | 23:40 | 24:45 | 25:55 | 27:10 | 28:20 | 29:20 | **30:00** |
+| Slide | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Seconds | 15 | 40 | 75 | 60 | 75 | 70 | 80 | 70 | 85 | 60 | 60 | 80 | 60 | 55 | 30 |
+| Running | 15:00 | 15:40 | 16:55 | 17:55 | 19:10 | 20:20 | 21:40 | 22:50 | 24:15 | 25:15 | 26:15 | 27:35 | 28:35 | 29:30 | **30:00** |
 
-`15+45+80+70+80+80+85+80+65+70+75+70+60+40 = 915 s = 15:15`
+`15+40+75+60+75+70+80+70+85+60+60+80+60+55+30 = 915 s = 15:15`
 
 **Total 885 + 915 = 1800 s = 30:00 exactly.**
 
@@ -144,11 +145,13 @@ Slide 13 is shared: Presenter 1 delivers 30 seconds, then the theme changes and
 Presenter 2 delivers 15. Presenter 2 should be speaking at the 15:00 mark.
 
 **If you are running long.** Compress slides 2 and 12 first (they carry the
-least unique evidence), then 16. Never compress 3, 8, 15, 19, 23 or 25 — those
-are the six slides an examiner will grade you on.
+least unique evidence), then 16 and 23. Never compress 3, 8, 15, 19, 21, 24 or
+26 — those are the seven slides an examiner will grade you on, and 21 is the
+single most important slide in the deck.
 
-**If you are running short.** Pull A8 (gate calibration in full) or A9 (drill
-demotion) forward — both extend an argument already on screen.
+**If you are running short.** Pull A12 (M9 in full), A15 (M12's three axes) or
+A16 (latency stage by stage) forward — each extends an argument already on
+screen.
 
 ---
 
@@ -220,10 +223,17 @@ Where every substantive claim on a slide comes from.
 | 22, A3 | 25 HTTP paths, 30 operations, 2 WebSockets | `docs/openapi.json` (25 paths, 30 methods) plus `/ws/live` and `/ws/knowledge` |
 | 24 | Unreadable Chroma index reported as empty; `KeyError: '_type'`; `CorpusUnreadableError`, `corpus_status` | `docs/FIX_LOG.md` §3; `core/errors.py`; `services/retrieval.py` |
 | 24 | 56 drill chunks, 5.3%; 25% of flags are majority prose; penalty 0.15; gate unmoved | `docs/FIX_LOG.md` §"reply quality" cause 3; `services/ingestion.py`; `config.py` |
-| 25 | M9 not run — no results directory | `ml/evaluation/` contains no `results/`; `README.md` records only the 0.5B stand-in |
-| 25 | M10 partial, M11 not started, M12 not run | `docs/PROJECT_PLAN.md`, Track M table |
-| 25 | Retrieval currently degrades reply quality vs retrieval off | `docs/FIX_LOG.md` §"reply quality" cause 2 |
-| A12 | Base-model behavioural baseline (0.5B): declined to assess 60%, admitted no material 50%, referred on 13% | `ml/evaluation/README.md` §"Measured baseline" |
+| 17, 26, A15 | Fidelity: macro F1 0.612 over 400 held-out SEP-28k clips, reproducing M4's 0.638 | `docs/M12_COMPARISON.md` §2; `ml/evaluation/bench_fidelity.py` |
+| 19, A15 | Groundedness: 100% in-corpus, 0% out-of-corpus, including the medication and diagnosis questions | `docs/M12_COMPARISON.md` §3; `ml/evaluation/bench_groundedness.py` |
+| 20, A11 | Q4_K_M: 5892 → 1840 MB (3.20×), 69.2 tok/s prefill, ~20 decode, 660 ms TTFT, 3.33 GB peak RSS | `docs/M10_OPTIMIZATION.md` §1; `ml/evaluation/bench_optimization.py` |
+| 20 | Base and fine-tuned identical in every cost dimension (adapters merged, not runtime) | `docs/M10_OPTIMIZATION.md` §1 |
+| 21, A12 | All eleven M9 checks; 125 generations per model; 0 exact contamination, max fuzzy 0.58 | `docs/M9_COMPARISON.md` |
+| 21, A12 | The regression survives broadened re-scoring: 73% vs 40% | `docs/M9_COMPARISON.md` §"This was verified" |
+| 21 | ETHICS.md discloses the regression | `docs/ETHICS.md`, model-limitations list |
+| 22, 24, A15, A16 | Serving builds: CPU ~57 s, CUDA 12.4 ~61 s, CUDA 13.3 ~1.4 s — 43× | `ml/finetuning/llama.cpp/README.md`; `docs/M10_OPTIMIZATION.md` §4; `docs/M12_COMPARISON.md` §1 |
+| 22, 24 | The two modes contend for one 8 GB GPU; that governs latency, not model speed | `docs/M12_COMPARISON.md` §1 and §"What this means" |
+| 26 | M11 deferred with four verified blockers | `docs/M11_MOSHI_LORA.md` |
+| 26 | Retrieval currently degrades reply quality vs retrieval off | `docs/FIX_LOG.md` §"reply quality" cause 2 |
 
 ---
 
@@ -233,16 +243,28 @@ Everything in this section is either unfinished, uncertain, or contradicted
 somewhere in the repository. The deck already handles each one — this list is
 so you do not accidentally undo that under questioning.
 
-### Required work that is outstanding
+### Required work: all four evaluation deliverables are now done
 
-| Item | State | Where the deck says so |
+Merged into `master` on 2026-09-07 from `feat/m9-m12-evaluation`. If you are
+working from an older copy of this pack, this section replaced a list that said
+they were outstanding.
+
+| Item | State | Where the deck presents it |
 |---|---|---|
-| **M9 — base vs fine-tuned comparison** | Harness and 25-case eval set written. No `ml/evaluation/results/` exists. The only recorded baseline used **Qwen2.5-0.5B** as a stand-in, not the 3B that ships. **This is a required feature of the brief.** | Slide 25, first item; A12's caveat block |
-| **M10 — optimization analysis** | Partial. Size and throughput measured; the FP16-vs-Q4_K_M quality delta on identical prompts is not. | Slide 25; slide 20 speaker notes |
-| **M11 — Moshi LoRA coaching adapter** | Scoped as a stretch goal, not started. Moshi cannot be system-prompted, so the coaching persona on the live path has no source yet. | Slide 25; slide 9 speaker notes |
-| **M12 — Moshi vs cascade over ≥50 turns** | Not run. How much of Moshi's 2.0 s is our bridge rather than Moshi remains a hypothesis. | Slide 15, "what is still open"; slide 25 |
-| **User study** | None. Everything reported is technical measurement. | Slide 25 |
-| **Docker compose, CI badges** | Planned, do not exist. The README says so explicitly. | Not claimed anywhere in the deck |
+| **M9 — base vs fine-tuned** | ✅ Done. 125 generations per model, both at Q4_K_M. Style improved; **both safety-critical checks regressed** (diagnosis refusal 53%→20%, referral 60%→33%), verified against broadened scoring. | Slide 21, in full; A12 |
+| **M10 — optimization analysis** | ✅ Done. 3.20× compression, 69/20 tok/s, 660 ms TTFT, 3.33 GB RSS. Base and fine-tuned identical at inference. | Slide 20; A11 |
+| **M11 — Moshi LoRA** | ⏸️ Deferred, with four blockers **verified rather than assumed**. It is the plan's one explicit stretch goal, not a rubric item. | Slide 26, right column |
+| **M12 — the headline comparison** | ✅ Done. Latency, fidelity and groundedness across both paths, with two axes honestly returning "not measurable" for Moshi. | Slides 22 and 24; A15 |
+
+### What is genuinely still outstanding
+
+| Item | Why it matters |
+|---|---|
+| **The M9 regression is unmitigated** | The fine-tuned model should not ship as the default. Three remedies are written down in `docs/M9_COMPARISON.md`; none has been applied. Say this yourself on slide 26 — it is the single most likely follow-up question. |
+| **A controlled f16-vs-Q4_K_M quality delta** | M9 compares base against fine-tuned at *fixed* precision, so it isolates fine-tuning, not quantization. Needs an f16 arm, roughly two hours per model on CPU. |
+| **The two modes under simultaneous GPU load** | Measured separately, never head-to-head — which is precisely the contention M12 identifies as the real constraint. |
+| **A user study** | Everything reported is technical measurement. Nobody from the target population has used the system. |
+| **The corpus** | Edwardian throughout, and retrieval measurably degrades reply quality against retrieval-off. A corpus problem, not a code problem. |
 
 ### Figures the repository contradicted itself on — now corrected
 
@@ -310,3 +332,8 @@ but not on this machine.
 - [ ] Read A14 once through the morning of. The last question on it —
       *what is your actual contribution rather than combining models* — is the
       one that decides the grade.
+- [ ] Rehearse slide 21 out loud twice. It carries a safety regression in your
+      own fine-tune, and delivering it plainly is worth more than any other
+      ninety seconds in the talk. Do not soften it, and do not apologise for
+      it — a comparison that only confirmed improvement would be far weaker
+      evidence that the harness works.
