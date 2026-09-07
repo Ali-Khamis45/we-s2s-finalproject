@@ -17,7 +17,7 @@ without a measurement is a guess that happened to work.
 |---|---|---|---|
 | 1 | The coach had no voice — TTS silently unavailable | **High** | `backend/requirements.txt` |
 | 2 | Mic button painted a 300×150 blob over the composer | **High** | `frontend/src/styles.css` |
-| 3 | Knowledge base silently reported 0 chunks; every answer ungrounded | **High** | environment / Chroma |
+| 3 | Knowledge base silently reported 0 chunks; every answer ungrounded | **High** | environment / Chroma, `retrieval.py` |
 | 4 | Virtualenv had drifted off its pins; contract test failed | Medium | environment |
 | 5 | `llama-cpp-python` cannot build, and aborts the whole install | Medium | `backend/requirements.txt` |
 | 6 | TypeScript build cache was tracked in git | Low | `.gitignore` |
@@ -140,12 +140,43 @@ version. It came back to exactly **1057 chunks**, matching the original count.
 
 Both match the documented in-corpus band of 0.696–0.814.
 
-**Open robustness gap.** The application caught that exception, logged nothing,
-and reported an empty corpus. An unreadable index is indistinguishable from an
-empty one, so the failure mode is *silently ungrounded answers* — the worst
-possible outcome for a system whose main safety property is refusing to answer
-outside its corpus. **This is not yet fixed** and is the highest-value item
-remaining.
+**Robustness gap — now fixed (2026-09-07).** The application caught that
+exception, logged nothing, and reported an empty corpus. An unreadable index
+was indistinguishable from an empty one, so the failure mode was *silently
+ungrounded answers* — the worst possible outcome for a system whose main
+safety property is refusing to answer outside its corpus.
+
+The cause was one clause in `RetrievalService.count()`:
+
+```python
+except Exception:
+    return 0        # a corrupt index and an empty one, reported identically
+```
+
+`count()` now separates the three cases. A missing `chromadb` is still `0` —
+there is genuinely no corpus. Anything else raised while opening or counting
+the index is logged and re-raised as a new `CorpusUnreadableError` (503,
+`corpus_unreadable`) carrying the driver's own exception as `detail.cause`.
+
+`/api/status` catches that one error rather than propagating it — the status
+panel is how an operator *finds out* the corpus is broken, so it has to keep
+answering — and reports a new `corpus_status` field, `"ok"` or `"unreadable"`.
+The System panel now reads *"unreadable — rebuild the index"* where it used to
+read *"empty"*.
+
+**Verification.** Against a real persistent Chroma store whose collection
+configuration was corrupted to reproduce the original `KeyError`:
+
+| index | before | after |
+|---|---|---|
+| healthy (2 chunks) | `2` | `2` |
+| corrupt | `0`, silent | raises `CorpusUnreadableError`, cause `KeyError: '_type'` |
+| `/api/status` | `corpus_chunks: 0` | `corpus_chunks: 0`, `corpus_status: "unreadable"` |
+
+Five tests in `backend/tests/test_retrieval.py` pin the distinction, including
+that `/api/status` keeps answering when the corpus cannot be read. Each was
+watched failing first — the status pair initially failed with a propagated 503,
+which is the regression that would otherwise have taken the whole panel down.
 
 ---
 
@@ -197,11 +228,16 @@ code**. The backend talks to an OpenAI-compatible endpoint over HTTP via `httpx`
 the package is only one suggested way to *serve* a model, mentioned in a scripts
 README.
 
-**Current status.** Installed everything except this package. Track M hit the
-identical wall independently and reached the same conclusion (see `M8` in
-`PROJECT_PLAN.md`). Two people losing time to the same non-dependency is a
-strong argument for demoting it to an optional extra with a comment — **not yet
-done**, and worth doing before anyone else clones this.
+**Fixed (2026-09-07).** Track M hit the identical wall independently and
+reached the same conclusion (see `M8` in `PROJECT_PLAN.md`). Re-verified before
+removing it: across the whole repository the only non-documentation reference
+to `llama_cpp` is a suggested serving command in `backend/scripts/README.md`.
+No application code imports it.
+
+It is now out of `requirements.txt`, replaced by a comment recording why it
+must not be added back, with the `pip install` line moved next to the command
+that actually needs it in the scripts README. `pip install -r requirements.txt`
+now completes on a machine with no C++ toolchain.
 
 ---
 
@@ -218,6 +254,21 @@ changes on every typecheck. Removed from tracking and added to `.gitignore`
 Not defects — recorded so the setup is reproducible. Track A's development box is
 an **RTX 3060 Laptop (6 GB), Ryzen 7 5800H, 20 GB RAM**, not the RTX 5050 (8 GB)
 the project plan is written around; the 5050 is Track M's machine.
+
+**The trained artifacts are selected by `backend/.env`, not by code.** Both are
+gitignored, so a machine that lacks them degrades silently to the heuristic
+analyzer and the base model — which is what Track A's box reports. Where they
+are present:
+
+```bash
+SCC_DYSFLUENCY_MODEL_PATH=../ml/dysfluency/checkpoints/wav2vec2-dysfluency
+SCC_LLM_MODEL=qwen2.5-3b-coaching
+SCC_LLM_VARIANT=finetuned
+```
+
+`/api/status` is the check: `analyzer` reads `wav2vec2-sep28k` rather than
+`heuristic`, and `llm_variant` reads `finetuned`. Both are reported precisely so
+a demo can never mistake scaffold output for model output.
 
 **Moshi is disabled here.** Quantized Moshi needs ~5.5–6.0 GB and this card has
 6144 MiB total with a desktop already composited on it. `SCC_MOSHI_ENABLED=false`
@@ -246,11 +297,31 @@ The acoustic branch was re-verified on this hardware against known ground truth
 Replies read as generic and occasionally strained. Investigated; **four
 contributing causes**, ranked by impact. None is fixed yet.
 
-**1 — The base model is running, not the fine-tuned one.** The System panel reads
-`Checkpoint: base`. Track M's M6→M7→M8 chain (400 coaching pairs → QLoRA →
-merged Q4_K_M GGUF) exists precisely to fix response tone. That artifact is
-gitignored and lives on Track M's machine. This is the largest single factor and
-the fix already exists.
+**1 — The base model was running, not the fine-tuned one.** The System panel
+read `Checkpoint: base`. Track M's M6→M7→M8 chain (400 coaching pairs → QLoRA →
+merged Q4_K_M GGUF) exists precisely to fix response tone.
+
+**Machine-specific, not a repo defect (checked 2026-09-07).** This was true of
+Track A's box, which has neither the artifacts nor a `backend/.env`. On Track
+M's machine both artifacts are present and already configured:
+
+| artifact | path | size |
+|---|---|---|
+| fine-tuned GGUF | `ml/finetuning/gguf/qwen2.5-3b-coaching-Q4_K_M.gguf` | 1.9 GB |
+| wav2vec2 checkpoint | `ml/dysfluency/checkpoints/wav2vec2-dysfluency/` | 378 MB |
+
+Both are gitignored, which is why they read as missing. `backend/.env` already
+sets `SCC_DYSFLUENCY_MODEL_PATH` and `SCC_LLM_VARIANT=finetuned`, and the
+analyzer selects the trained classifier on load:
+
+```
+backend selected: wav2vec2-sep28k
+labels          : {0: block, 1: prolongation, 2: sound_repetition,
+                   3: word_repetition, 4: interjection}
+```
+
+The labels match the M5 schema contract. Nothing to fix in the repository —
+this is a per-machine setup step, recorded under *Configuration* below.
 
 **2 — The corpus is Edwardian.** Every source is public domain, so everything
 predates 1930: *The Art of Public Speaking* (1915), *Vocal Expression* (1919),
@@ -265,13 +336,54 @@ are like little pauses in a song."* **Measured directly: the same model on the
 same question gave a cleaner answer with retrieval OFF than ON.** Retrieval is
 currently degrading reply quality rather than improving it.
 
-**3 — About 12% of the corpus is not coachable prose.** Across all 1057 chunks:
-110 question drills and 14 exercise lists (**124, or 11.7%**). One citation
-returned for the pause query was literally back-of-chapter homework
-(*"2. What are the four special effects of pause?"*). Filtering these at ingest
-would help, but it shrinks the corpus, and the project's own configuration notes
-are emphatic that corpus size moves the groundedness threshold — so it requires
-re-running `calibrate_gate.py` afterward or refusals will drift.
+**3 — Part of the corpus is not coachable prose. Fixed 2026-09-07 by demoting,
+not deleting.** One citation returned for the pause query was literally
+back-of-chapter homework (*"2. What are the four special effects of pause?"*).
+
+Re-measured with a structural detector (a run of ≥3 ascending numbered items
+that dominates the chunk): **56 chunks, 5.3%** — lower than the 11.7% first
+estimated, because the earlier count treated any numbered line as a drill.
+
+The obvious fix — drop them at ingest — is the wrong one, and measuring said so:
+
+* **25% of what a structural detector flags is majority prose.** The splitter
+  overlaps chunks, so genuine passages carry a numbered tail from the drill that
+  follows. Deleting on a flag discards real coaching material at a 1-in-4 rate.
+* **Dropping chunks moves the gate.** `retrieval_min_score` is calibrated
+  against corpus size and the in/out band is only 0.077 wide.
+
+So drills are **marked, never removed**. `ingestion.is_drill_chunk` writes
+`is_drill` into chunk metadata, and `mmr_select` subtracts
+`retrieval_drill_penalty` (0.15) from a flagged chunk's relevance when ranking
+citations. The penalty applies *after* the groundedness gate, so the gate still
+sees true similarity. A drill can still be cited when nothing better matches —
+a worse citation than prose, a better one than silence.
+
+**Verification.** Re-ingested (1057 chunks, 56 marked) and queried before/after:
+
+| query | drills cited before | after | `best_score` |
+|---|---|---|---|
+| "use pauses more effectively" | 1 | **0** | 0.775 → 0.775 |
+| "stop sounding monotonous" | 1 | **0** | 0.722 → 0.722 |
+| "what to do with my hands" | 1 | **0** | 0.722 → 0.722 |
+
+`best_score` is unchanged throughout — the demotion reorders citations without
+touching groundedness. For the monotony query the top citation flips from
+*"9. What effect do habits of thought have on confidence?"* to actual prose on
+testing your delivery on a friend.
+
+**The gate is provably unmoved**, re-run over `calibrate_gate.py`'s own
+question sets:
+
+```
+in  corpus : min 0.696  median 0.720  max 0.814   grounded 10/10
+out corpus : min 0.432  median 0.532  max 0.619   grounded  0/8
+gap        : 0.077
+```
+
+Identical to the calibration recorded in `config.py`, so `retrieval_min_score`
+needed no re-derivation — which was the entire point of demoting rather than
+filtering.
 
 **4 — 3B is small.** An A/B on the identical system prompt with retrieval off
 showed an 8B staying tighter and avoiding the 3B's advice to "pause for about
@@ -290,7 +402,7 @@ deliberate: the system prompt specifies "two to four sentences" and
 Current state of the tree, all run on this machine:
 
 ```bash
-cd backend  && pytest              # 80 passed
+cd backend  && pytest              # 92 passed
 cd frontend && npm test            # 42 passed
 cd frontend && npx tsc --noEmit    # clean
 cd frontend && npm run build       # clean
@@ -300,21 +412,39 @@ Runtime, with all three services up:
 
 ```json
 { "llm_reachable": true, "stt_loaded": true, "corpus_chunks": 1057,
-  "analyzer": "heuristic", "prompt_version": "a12-v5", "llm_variant": "base" }
+  "corpus_status": "ok", "analyzer": "heuristic",
+  "prompt_version": "a12-v5", "llm_variant": "base" }
 ```
 
-`analyzer: heuristic` and `llm_variant: base` are both expected here — the
-trained wav2vec2 checkpoint and the fine-tuned GGUF are gitignored artifacts on
-Track M's machine. The M5 schema freeze means both drop in without a frontend
-change.
+`analyzer: heuristic` and `llm_variant: base` are what Track A's box reports —
+the trained wav2vec2 checkpoint and the fine-tuned GGUF are gitignored, so a
+machine without them degrades to the heuristic and the base model. On a machine
+that has both (Track M's), the same build reports `wav2vec2-sep28k` and
+`finetuned` with no code change: the M5 schema freeze means both drop in
+without touching the frontend. See cause 1 above for the paths and the env
+variables that select them.
 
 ---
 
 ## Open items
 
+**All four closed 2026-09-07.**
+
+| Item | Resolution |
+|---|---|
+| Unreadable Chroma index reported "empty" | `CorpusUnreadableError` + `corpus_status`; see §3 |
+| Make `llama-cpp-python` an optional extra | Removed from `requirements.txt`; see §5 |
+| Obtain the fine-tuned GGUF and wav2vec2 checkpoint | Already present and wired on Track M's box; per-machine setup, not a repo defect. See *reply quality*, cause 1 |
+| Filter drill chunks, then recalibrate the gate | Superseded: chunks are **demoted, not filtered**, so no recalibration is needed. See *reply quality*, cause 3 |
+
+Two of the four turned out not to need the fix as written. The artifacts were
+never missing, only unconfigured on one machine; and filtering drill chunks
+would have deleted real prose at a 1-in-4 rate and moved a gate whose in/out
+band is 0.077 wide, so they are demoted at rank time instead.
+
+**Still open — reply quality, from the section above.** Neither is a defect:
+
 | Item | Why it matters |
 |---|---|
-| Unreadable Chroma index reports "empty" instead of erroring | Silently ungrounded answers; defeats the refusal guarantee |
-| Make `llama-cpp-python` an optional extra | Blocks a clean install; has now cost both tracks time |
-| Obtain the fine-tuned GGUF and wav2vec2 checkpoint | Largest available improvement to reply quality and analyzer fidelity |
-| Filter drill/index chunks, then recalibrate the gate | Removes 11.7% non-prose from retrieval |
+| The corpus is Edwardian (cause 2) | Retrieval measurably *degrades* replies vs. retrieval off; needs modern source material, not a code change |
+| 3B is small (cause 4) | An 8B stays tighter on the same prompt; a hardware/model-size trade, deliberately taken |
