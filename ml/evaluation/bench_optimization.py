@@ -23,7 +23,10 @@ quality is a behavioural question, and M9 already runs 11 behavioural checks
 over a held-out set. This file measures cost; that file measures whether the
 cost bought a regression.
 
-    python ml/evaluation/bench_optimization.py --reps 3
+Run it with the **backend** venv, not ml's: the TTFT measurement needs `httpx`,
+which lives there (as does `run_eval.py`'s dependency on the same client).
+
+    backend/.venv/Scripts/python.exe ml/evaluation/bench_optimization.py --reps 3
 
 Writes `results/optimization.json` and `results/optimization.md`.
 """
