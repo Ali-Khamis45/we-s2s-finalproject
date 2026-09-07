@@ -44,10 +44,14 @@ ml/moshi/_bench_bridge.log
 ml/finetuning/checkpoints/
 ml/dysfluency/checkpoints/
 ml/finetuning/adapters/
-# M8: prebuilt llama.cpp binaries, fetched by hand (not built from source in
-# this repo) -- see ml/finetuning/llama.cpp/README.md.
-ml/finetuning/llama.cpp/*.exe
-ml/finetuning/llama.cpp/*.dll
+# M8: prebuilt llama.cpp release, fetched by hand (not built from source in
+# this repo). The whole directory is downloaded content -- binaries plus the
+# licence files and docs the release ships -- so ignore all of it and keep only
+# the README, which is ours and records how to fetch it. Ignoring the directory
+# rather than listing extensions means a future release adding new file types
+# does not silently reintroduce untracked noise.
+ml/finetuning/llama.cpp/*
+!ml/finetuning/llama.cpp/README.md
 # M6: generated dataset (regenerated from the corpus, not source).
 data/finetuning/
 # M8: merged fp16 model (regenerated from the base model + adapter) and
