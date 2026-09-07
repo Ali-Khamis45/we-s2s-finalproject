@@ -25,7 +25,11 @@ from typing import Any
 import numpy as np
 
 from app.core.config import settings
-from app.core.errors import CorpusEmptyError, DependencyMissingError
+from app.core.errors import (
+    CorpusEmptyError,
+    CorpusUnreadableError,
+    DependencyMissingError,
+)
 from app.core.logging import get_logger
 from app.schemas.chat import Citation
 
@@ -192,11 +196,32 @@ class RetrievalService:
     # ---- queries -------------------------------------------------------
 
     async def count(self) -> int:
+        """Number of indexed chunks.
+
+        Only a *missing* corpus counts as zero. If the index is present but the
+        driver cannot read it, that is raised, not smoothed over -- see
+        `CorpusUnreadableError` for why the difference is load-bearing.
+        """
         try:
             collection = await self.collection()
-            return int(await asyncio.to_thread(collection.count))
-        except Exception:
+        except DependencyMissingError:
+            # chromadb is not installed, so there is genuinely no corpus here.
             return 0
+        except Exception as exc:
+            log.error(
+                "corpus index could not be opened",
+                extra={"error": f"{type(exc).__name__}: {exc}"},
+            )
+            raise CorpusUnreadableError(exc) from exc
+
+        try:
+            return int(await asyncio.to_thread(collection.count))
+        except Exception as exc:
+            log.error(
+                "corpus index could not be counted",
+                extra={"error": f"{type(exc).__name__}: {exc}"},
+            )
+            raise CorpusUnreadableError(exc) from exc
 
     async def retrieve(
         self,

@@ -30,7 +30,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.errors import NotFoundError
+from app.core.errors import CorpusUnreadableError, NotFoundError
 from app.core.logging import get_logger
 from app.db.models import Session as SessionRow
 from app.db.models import Turn as TurnRow
@@ -333,12 +333,22 @@ class Orchestrator:
         return transcript, acoustic
 
     async def health(self) -> dict[str, object]:
-        corpus = await retrieval_service.count()
+        # The status panel is how an operator learns the corpus is broken, so
+        # it must keep answering when it is. An unreadable index is reported
+        # as such rather than raised -- but it is never reported as "empty",
+        # which would be indistinguishable from a healthy, unpopulated corpus.
+        try:
+            corpus = await retrieval_service.count()
+            corpus_status = "ok"
+        except CorpusUnreadableError:
+            corpus, corpus_status = 0, "unreadable"
+
         return {
             "live_available": await moshi_client.available(),
             "llm_reachable": await llm_service.health(),
             "stt_loaded": stt_service.loaded,
             "corpus_chunks": corpus,
+            "corpus_status": corpus_status,
             "analyzer": dysfluency_analyzer.backend_name,
             "prompt_version": templates.PROMPT_VERSION,
             "llm_variant": settings.llm_variant,

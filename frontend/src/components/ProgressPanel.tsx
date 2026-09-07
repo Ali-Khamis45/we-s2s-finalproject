@@ -76,9 +76,19 @@ export function ProgressPanel({
           />
           <SysRow
             label="Knowledge base"
-            ok={(status?.corpus_chunks ?? 0) > 0}
+            ok={
+              status?.corpus_status !== "unreadable" &&
+              (status?.corpus_chunks ?? 0) > 0
+            }
             okText={`${status?.corpus_chunks ?? 0} chunks`}
-            offText="empty"
+            /* An unreadable index must not read as "empty". Empty is a corpus
+               waiting to be ingested; unreadable is answers going out
+               ungrounded while this panel claims nothing is wrong. */
+            offText={
+              status?.corpus_status === "unreadable"
+                ? "unreadable — rebuild the index"
+                : "empty"
+            }
           />
           <li className="sys-row">
             <span>Analyzer</span>

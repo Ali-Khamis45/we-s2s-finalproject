@@ -94,6 +94,7 @@ class TestStatusShape:
             "llm_reachable": bool,
             "stt_loaded": bool,
             "corpus_chunks": int,
+            "corpus_status": str,
             "analyzer": str,
             "prompt_version": str,
             "llm_variant": str,

@@ -106,6 +106,30 @@ class CorpusEmptyError(AppError):
     )
 
 
+class CorpusUnreadableError(AppError):
+    """The index exists but this Chroma cannot read it.
+
+    Deliberately distinct from `CorpusEmptyError`. An index written by a newer
+    Chroma raises `KeyError: '_type'` out of the driver, and the natural
+    handling -- catch it and report zero chunks -- makes an unreadable corpus
+    indistinguishable from an empty one. That is the worst available outcome:
+    the groundedness gate sees no material, so every answer goes out ungrounded
+    and uncited while `/api/status` calmly reports a healthy, empty corpus.
+    Failing loudly here is the point.
+    """
+
+    code = "corpus_unreadable"
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    message = (
+        "The knowledge base index exists but could not be read -- it was "
+        "probably written by a different version of Chroma. Rebuild it with "
+        "POST /api/corpus/ingest."
+    )
+
+    def __init__(self, cause: BaseException) -> None:
+        super().__init__(detail={"cause": f"{type(cause).__name__}: {cause}"})
+
+
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def _app_error(_: Request, exc: AppError) -> JSONResponse:

@@ -64,6 +64,13 @@ export interface SystemStatus {
   llm_reachable: boolean;
   stt_loaded: boolean;
   corpus_chunks: number;
+  /**
+   * Whether the index could be read at all. `unreadable` means an index is
+   * present but the installed Chroma cannot open it -- distinct from a
+   * readable corpus holding zero chunks, which is `ok`. Without this the two
+   * are indistinguishable and the UI reports a broken corpus as an empty one.
+   */
+  corpus_status: "ok" | "unreadable";
   analyzer: string;
   prompt_version: string;
   llm_variant: string;
