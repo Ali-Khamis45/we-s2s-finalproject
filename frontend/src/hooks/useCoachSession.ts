@@ -60,6 +60,8 @@ export function useCoachSession() {
   const sessionRef = useRef<string | null>(null);
   const speakingTimer = useRef<number | null>(null);
   const bargeInRef = useRef<BargeInDetector | null>(null);
+  //: Monotonic id for the newest connect attempt; older ones bail out.
+  const connectAttemptRef = useRef(0);
   // The level callback is created once when capture starts, so reading
   // `speaking` from state there would capture the value at that moment forever.
   const speakingRef = useRef(false);
@@ -293,7 +295,20 @@ export function useCoachSession() {
 
   const connect = useCallback(
     async (target: Mode) => {
+      // Claim the attempt before the first await. There are three async
+      // boundaries below (teardown, ensureSession, fetchWsTicket) before
+      // `socketRef` is set, so two overlapping calls would both sail past a
+      // socket-based check and open two sockets.
+      //
+      // That is not hypothetical: React StrictMode double-invokes effects in
+      // dev, and Moshi is single-session. The second connection displaces the
+      // first, the backend reports "no close frame received or sent", and the
+      // UI shows "The live coach dropped out" seconds after connecting.
+      const attempt = ++connectAttemptRef.current;
+      const stale = () => attempt !== connectAttemptRef.current;
+
       await teardown();
+      if (stale()) return;
       setError(null);
       setConnection("connecting");
 
@@ -309,6 +324,7 @@ export function useCoachSession() {
         setConnection("error");
         return;
       }
+      if (stale()) return;
 
       // A fresh single-use ticket per connect, never cached. The socket cannot
       // carry an Authorization header, and a JWT in the query string would be
@@ -320,8 +336,14 @@ export function useCoachSession() {
         return;
       }
 
+      if (stale()) return;
+
       const player = new StreamPlayer(wantLive ? LIVE_SAMPLE_RATE : 24_000);
       await player.resume();
+      if (stale()) {
+        await player.close();
+        return;
+      }
       playerRef.current = player;
 
       const socket = new WebSocket(wsUrl(path, { session_id: id, ticket }));
