@@ -85,7 +85,7 @@ than rhetorical. From `backend/scripts/bench_whisper.py`:
 Press **Start speaking**. Have a short, natural exchange — you are rehearsing a
 presentation, and you deliberately speak with pauses and repetitions.
 
-Point at the mode pill in the header: **Live coach · ~200 ms**.
+Point at the mode pill in the header: **Live coach**.
 
 > This path is native speech-to-speech. Audio tokens in, audio tokens out, no
 > text in the middle. It runs full-duplex, so I can interrupt it —
@@ -208,10 +208,14 @@ Point at the progress panel.
 
 Then be straight about latency, because they will ask:
 
-> The live path is ~200 ms. The cascade is seconds — we measured about 1.9
-> seconds to first audio, and honestly our original estimate of one second was
-> wrong. That gap is the project's main quantitative result: the cascade buys
-> retrieval and grounding, and pays for it in latency.
+> The live path measures about two seconds to first audio — p50 2009.9 ms,
+> p95 2645. The cascade is ten to twenty-eight seconds warm. Both of those
+> replaced estimates that were wrong, and wrong in the same direction: we
+> planned for a one-second cascade and for Kyutai's published two hundred
+> milliseconds on the live path, and neither survived measurement on this
+> hardware. That gap is still the project's main quantitative result — the
+> cascade buys retrieval and grounding, and pays seconds for them — it is just
+> five to fourteen times rather than a hundred.
 
 ---
 

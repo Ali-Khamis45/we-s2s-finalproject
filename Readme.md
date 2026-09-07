@@ -45,10 +45,18 @@ result:
 | | Live Coach | Grounded Knowledge |
 |---|---|---|
 | **Model** | Quantized Moshi (native speech-to-speech) | Whisper → analyzer → RAG → LLM → TTS |
-| **Latency** | ~200 ms, full-duplex | ~10–28 s warm on a local 3B |
+| **Latency** | ~2.0 s p50 measured, full-duplex | ~10–28 s warm on a local 3B |
 | **Hears dysfluency?** | Yes — natively, from audio tokens | Yes — via a parallel acoustic branch |
 | **Can cite sources?** | No. Structurally cannot. | Yes, with a groundedness gate |
 | **Placement** | GPU, resident | CPU |
+
+> **On the ~2.0 s.** Kyutai publish ~200 ms for Moshi, and earlier drafts of
+> this README repeated it. Measured on this hardware, through the M2 production
+> bridge, with real speech: **p50 2009.9 ms, p95 2645.0 ms**
+> (`ml/moshi/bench_moshi_latency.py`; M1's prototype relay measured p50 1636 ms).
+> Some of the gap is structural — Mimi runs at 12.5 Hz and its causal encoder
+> needs several frames of lookahead — but how much of the remainder is the
+> bridge rather than Moshi is not yet established. See `docs/M1_BRINGUP_LOG.md`.
 
 Native S2S is the flagship because it removes the text bottleneck by design.
 That same design is why it has no prompt surface, no retrieval injection point,
@@ -68,10 +76,10 @@ produce on its own.
               │                           │
       ╔═══════▼═══════╗          ╔════════▼═════════╗
       ║  LIVE COACH   ║          ║    GROUNDED      ║
-      ║  ~200 ms GPU  ║          ║  ~seconds, CPU   ║
+      ║  ~2.0 s GPU   ║          ║  ~seconds, CPU   ║
       ╚═══════╤═══════╝          ╚════════╤═════════╝
               │                           │
-      Mimi codec → Moshi 7B q4    ┌────────┴────────┐
+      Mimi codec → Moshi 7B q8    ┌────────┴────────┐
       full-duplex, barge-in       │                 │
               │              Whisper base    Acoustic branch
       Inner Monologue text        │        (raw audio, forked)
@@ -109,7 +117,7 @@ Two things worth noticing in that screenshot:
 
 1. **The generate stage dominates** — 28.11 s of a 28.11 s turn. On a
    CPU-served 3B, the LLM *is* the latency. That is the honest number, and it is
-   the whole argument for the ~200 ms native path sitting beside it.
+   the whole argument for the ~2.0 s native path sitting beside it.
 2. **The second question was refused.** *"How do I change the oil filter in a
    diesel engine?"* returned a graceful decline, not a hallucination — the
    groundedness gate found nothing in the corpus above threshold.
@@ -246,7 +254,7 @@ Or through the Makefile, which wraps the whole lot (`scripts/make.ps1` is the
 PowerShell equivalent — same target names):
 
 ```bash
-make test           # 80 backend tests + 41 frontend tests
+make test           # 92 backend tests + 42 frontend tests
 make lint           # Ruff and TypeScript, strict
 make check-types    # fails if the committed schema or types are stale
 make bench          # full verification run (needs models and a served LLM)

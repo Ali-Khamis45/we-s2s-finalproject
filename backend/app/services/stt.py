@@ -3,8 +3,9 @@
 Satisfies the brief's STT requirement and feeds the Knowledge Mode cascade.
 
 Two things worth knowing about how it is used here. It runs on CPU by design:
-the GPU is reserved for Moshi, and `small` with int8 on CTranslate2 transcribes
-a short utterance in roughly 150–300 ms, which fits the ~1 s cascade budget.
+the GPU is reserved for Moshi, and `base` with int8 on CTranslate2 transcribes
+a short utterance in roughly 600 ms (p50, measured — see `bench_whisper.py` and
+the note above `whisper_model` in `core/config.py`).
 And its output is deliberately *not* the whole story — the transcript loses the
 dysfluency that this project is about, which is why `DysfluencyAnalyzer` reads
 the same audio in parallel.

@@ -94,8 +94,8 @@ what was said.
 | | **Live Coach** | **Grounded Knowledge** |
 |---|---|---|
 | Architecture | Native speech-to-speech (Moshi) | Cascade (Whisper → RAG → LLM → TTS) |
-| Latency | ~200 ms | ~1.9 s measured (§9.2) |
-| Placement | GPU-resident, ~6 GB | CPU |
+| Latency | ~2.0 s p50 measured (§9.3) | ~10–28 s measured (§9.3) |
+| Placement | GPU-resident, ~7.7 GB at q8 | CPU |
 | Strength | Full-duplex conversation, hears dysfluency directly | Retrieval, citation, groundedness |
 | Weakness | Cannot retrieve, cannot be steered by a prompt | Slow; loses acoustics without help |
 
@@ -128,8 +128,8 @@ prompt builder folds back in as structured context. The text pipeline keeps its
 retrieval and reasoning; the acoustic evidence survives alongside it.
 
 This is the project's technical contribution, and it works: against a 1400 ms
-block spliced into real speech, the analyzer recovered **1480 ms**, located
-within 105 ms, while Whisper's transcript contained no trace of it (§9.1).
+block spliced into real speech, the analyzer recovered **1500 ms**, located
+within 145 ms, while Whisper's transcript contained no trace of it (§9.1).
 
 ### 3.2 Measurable value to the user
 
@@ -154,7 +154,7 @@ Fixed by the brief, with the placement decisions ours:
 |---|---|---|
 | Frontend | React 18, Vite, TypeScript | Browser |
 | Backend | FastAPI, async SQLAlchemy | CPU |
-| Live model | Moshi 7B, q4, Mimi codec | **GPU (~6 GB)** |
+| Live model | Moshi 7B, q8, Mimi codec | **GPU (~7.7 GB)** |
 | STT | faster-whisper `base`, int8 | CPU |
 | Acoustic analyzer | wav2vec2 + SEP-28k head | CPU |
 | LLM | Qwen2.5-3B-Instruct, GGUF Q4_K_M via llama.cpp | CPU |
@@ -165,7 +165,9 @@ Fixed by the brief, with the placement decisions ours:
 
 ### 4.2 Fitting an 8 GB card
 
-The deployment target has 8 GB of VRAM, and Moshi alone occupies ~6 GB at q4.
+The deployment target has 8 GB of VRAM, and Moshi alone occupies ~7.7 GB of
+the 8.15 GB usable at q8. (The plan budgeted 5.5–6.0 GB at q4; no q4
+configuration ships upstream, so q8 is what runs.)
 Running the cascade on the GPU as well is not possible.
 
 Rather than swapping models in and out on every mode change — which would add
@@ -421,18 +423,26 @@ A dysfluent utterance was constructed from real synthesized speech with known
 ground truth — `"I ... I ... I want [1400 ms block] water please"` — and run
 through the production path.
 
-Whisper's transcript: **`"I, I, I, I, want. Water please."`** The block is
-absent from it entirely.
+Whisper's transcript: **`"I, I, I, want Water"`** The block is absent from it
+entirely.
 
 | Ground truth | Measured | Error |
 |---|---|---|
-| Block duration 1400 ms | 1480 ms | 80 ms |
-| Block onset at 1345 ms | 1240 ms | 105 ms |
-| Word repetition | detected ×3 | — |
+| Block duration 1400 ms | 1500 ms | 100 ms |
+| Block onset at 1345 ms | 1200 ms | 145 ms |
+| Utterance 3157 ms | 3158 ms | 1 ms |
+| Word repetition | detected ×2 | — |
 | TTS rate response | 0.75× | — |
 
-The error bound is set by Whisper's word-timestamp resolution, not by the
-analyzer.
+The word audio is re-synthesized on every run, so the script asserts tolerances
+rather than exact values; expect these figures to move by tens of milliseconds
+between runs. The error bound is set by Whisper's word-timestamp resolution, not
+by the analyzer.
+
+The repetition is reported as two overlapping events rather than three discrete
+ones: the detector marks spans, and three "I"s 300 ms apart produce two
+overlapping repetition spans. The count is of events, not of repeated
+syllables.
 
 ### 9.2 Whisper model selection
 
@@ -484,7 +494,8 @@ took the figure from 50 s to ~15 s:
 That is the honest cost of running a 3B model on CPU because the GPU is
 reserved for the live path, and it is precisely the trade the project exists to
 measure: the cascade buys retrieval, citation and groundedness, and pays
-seconds for them, against Moshi's ~200 ms which buys none of those things.
+seconds for them, against Moshi's measured ~2.0 s which buys none of those
+things.
 
 ## 10. Model Evaluation
 
@@ -574,7 +585,9 @@ change.
 > the cascade on latency (p50/p95 over ≥50 turns), dysfluency perception
 > fidelity, and response groundedness.
 >
-> Our cascade figure is **~1.9 s to first audio** (§9.3). Report Moshi's
+> Our cascade figure is **~10–28 s per turn** (§9.3), and Moshi's own measured
+> figure through the M2 production bridge is **p50 2009.9 ms / p95 2645.0 ms**.
+> Re-run both against the production service over ≥50 turns. Report Moshi's
 > measured latency beside it, and be explicit about what each architecture buys
 > and what it costs.
 
@@ -582,10 +595,13 @@ change.
 
 Stated plainly, because an examiner will find them.
 
-1. **The live path is unproven.** The Moshi client is written and the
-   application falls back cleanly, but the flagship has not been exercised
-   end to end; it depends on the model service and on Blackwell `sm_120`
-   bring-up.
+1. **The live path is measured but not yet compared.** Moshi builds and runs
+   on Blackwell `sm_120` at q8, and the M2 production bridge measured p50
+   2009.9 ms / p95 2645.0 ms to first audio with real speech. What has *not*
+   been done is M12: the p50/p95 comparison against the cascade over ≥50 turns,
+   and establishing how much of that 2 s is the bridge rather than Moshi
+   itself. Until then the latency gap is measured but its cause is a
+   hypothesis. Moshi also remains un-steerable — see §12.3.
 2. **The analyzer in the current build is a heuristic**, derived from Whisper
    word timings and frame energy. It was built so the interface and prompt
    contract were not blocked on SEP-28k acquisition. It detects four of the five
@@ -624,12 +640,12 @@ that a system can be built which does not.
 
 The claim held, and it is measurable. Whisper `tiny` erased a 1.4-second block
 and three repetitions from our test utterance; the parallel acoustic branch
-recovered that block to within 80 ms and changed the coach's own speaking rate in
-response.
+recovered that block to within about 100 ms and changed the coach's own speaking
+rate in response.
 
 The engineering answer is not to abandon the cascade. Native speech-to-speech
-buys conversational immediacy — ~200 ms, full-duplex, dysfluency perceived
-directly — and gives up retrieval, citation, and steerability. The cascade buys
+buys conversational immediacy — a measured ~2.0 s, full-duplex, dysfluency
+perceived directly — and gives up retrieval, citation, and steerability. The cascade buys
 grounded, attributable answers and pays seconds for them. The product runs both
 and routes between them, and the acoustic branch ensures the text path does not
 discard the evidence the project is about.

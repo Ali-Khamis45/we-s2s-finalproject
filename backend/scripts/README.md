@@ -150,7 +150,8 @@ zero:
 
 The original default of 0.28 admitted all three, which meant the coach would
 have answered an out-of-corpus question from weak matches instead of saying it
-had no material. The gate now sits at 0.55. Being unhelpful about technique is
+had no material. The gate now sits at 0.65, re-derived against the real corpus
+by `calibrate_gate.py` above. Being unhelpful about technique is
 much better than being confidently wrong about it.
 
 ---
@@ -189,12 +190,18 @@ Warm-path per-stage latency, p50 and p95. Feeds M10 and M12.
 python scripts/bench_latency.py scripts/words/dysfluent_utterance.wav 5
 ```
 
-**This replaced an estimate with a measurement, and the estimate was wrong.**
-The plan originally claimed 750 ms – 1.1 s to first audio. Measured: **~1.9 s**
-on a 0.5B model, and the project ships 3B. Expect seconds.
+**This replaced an estimate with a measurement, and the estimate was wrong
+twice.** The plan originally claimed 750 ms – 1.1 s to first audio. A
+measurement on a 0.5B stand-in produced ~1.9 s. The real 3B on the real corpus
+produced **50 s** on first run, and **~10–28 s** warm after two optimizations —
+capping retrieved excerpts at 700 characters and cutting the generation budget
+from 420 tokens to 200. See `docs/REPORT.md` §9.3 for the per-stage breakdown.
 
-That is not bad news for the thesis — it widens the gap against Moshi's
-~200 ms, which is exactly the comparison M12 exists to make.
+That is not bad news for the thesis — it widens the gap against Moshi's own
+measured **p50 2009.9 ms / p95 2645.0 ms** (`ml/moshi/bench_moshi_latency.py`,
+through M2's production bridge), which is exactly the comparison M12 exists to
+make. Do not quote Kyutai's published ~200 ms figure; it has never been
+reproduced on this hardware.
 
 ---
 
