@@ -1,6 +1,7 @@
 ﻿import { useCallback, useEffect, useRef, useState } from "react";
 
 import * as replay from "../audio/replay";
+import { BargeInDetector } from "../audio/bargein";
 import { MicrophoneCapture } from "../audio/capture";
 import { StreamPlayer } from "../audio/player";
 import { api, wsUrl } from "../lib/api";
@@ -58,6 +59,12 @@ export function useCoachSession() {
   const pendingCoachRef = useRef<string | null>(null);
   const sessionRef = useRef<string | null>(null);
   const speakingTimer = useRef<number | null>(null);
+  const bargeInRef = useRef<BargeInDetector | null>(null);
+  //: Monotonic id for the newest connect attempt; older ones bail out.
+  const connectAttemptRef = useRef(0);
+  // The level callback is created once when capture starts, so reading
+  // `speaking` from state there would capture the value at that moment forever.
+  const speakingRef = useRef(false);
 
   useEffect(() => {
     sessionRef.current = sessionId;
@@ -118,6 +125,8 @@ export function useCoachSession() {
     captureRef.current = null;
     await playerRef.current?.close();
     playerRef.current = null;
+    bargeInRef.current = null;
+    speakingRef.current = false;
     setListening(false);
     setSpeaking(false);
     setMicLevel(0);
@@ -286,7 +295,20 @@ export function useCoachSession() {
 
   const connect = useCallback(
     async (target: Mode) => {
+      // Claim the attempt before the first await. There are three async
+      // boundaries below (teardown, ensureSession, fetchWsTicket) before
+      // `socketRef` is set, so two overlapping calls would both sail past a
+      // socket-based check and open two sockets.
+      //
+      // That is not hypothetical: React StrictMode double-invokes effects in
+      // dev, and Moshi is single-session. The second connection displaces the
+      // first, the backend reports "no close frame received or sent", and the
+      // UI shows "The live coach dropped out" seconds after connecting.
+      const attempt = ++connectAttemptRef.current;
+      const stale = () => attempt !== connectAttemptRef.current;
+
       await teardown();
+      if (stale()) return;
       setError(null);
       setConnection("connecting");
 
@@ -302,6 +324,7 @@ export function useCoachSession() {
         setConnection("error");
         return;
       }
+      if (stale()) return;
 
       // A fresh single-use ticket per connect, never cached. The socket cannot
       // carry an Authorization header, and a JWT in the query string would be
@@ -313,8 +336,14 @@ export function useCoachSession() {
         return;
       }
 
+      if (stale()) return;
+
       const player = new StreamPlayer(wantLive ? LIVE_SAMPLE_RATE : 24_000);
       await player.resume();
+      if (stale()) {
+        await player.close();
+        return;
+      }
       playerRef.current = player;
 
       const socket = new WebSocket(wsUrl(path, { session_id: id, ticket }));
@@ -325,9 +354,21 @@ export function useCoachSession() {
         setConnection("connected");
         setMode(target);
         try {
+          bargeInRef.current = new BargeInDetector();
           const capture = new MicrophoneCapture({
             sampleRate: rate,
-            onLevel: setMicLevel,
+            onLevel: (level) => {
+              setMicLevel(level);
+              // Barge-in: this is what makes "just talk to interrupt" true.
+              // Only meaningful while the coach is actually speaking; the
+              // detector keeps calibrating either way so playback echo gets
+              // learned as noise instead of read as an interruption.
+              if (bargeInRef.current?.push(level, speakingRef.current)) {
+                playerRef.current?.flush();
+                setSpeaking(false);
+                speakingRef.current = false;
+              }
+            },
             onFrame: (pcm) => {
               if (socket.readyState === WebSocket.OPEN) socket.send(pcm);
             },
@@ -364,7 +405,13 @@ export function useCoachSession() {
       };
 
       speakingTimer.current = window.setInterval(() => {
-        setSpeaking(playerRef.current?.isPlaying ?? false);
+        const playing = playerRef.current?.isPlaying ?? false;
+        // A fresh reply is a fresh chance to interrupt: clear any part-built
+        // burst so speech carried over from the previous turn cannot fire
+        // instantly against the new one.
+        if (playing && !speakingRef.current) bargeInRef.current?.reset();
+        speakingRef.current = playing;
+        setSpeaking(playing);
       }, 120);
     },
     [ensureSession, handleFrame, teardown],
@@ -443,6 +490,8 @@ export function useCoachSession() {
   const interrupt = useCallback(() => {
     playerRef.current?.flush();
     setSpeaking(false);
+    speakingRef.current = false;
+    bargeInRef.current?.reset();
   }, []);
 
   /**

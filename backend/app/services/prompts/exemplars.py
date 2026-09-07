@@ -127,6 +127,26 @@ EXEMPLARS: tuple[Exemplar, ...] = (
 )
 
 
+#: A reduced set, for measuring what few-shot length costs on CPU (see
+#: SYSTEM_PROMPT_COMPACT in templates.py for the latency arithmetic).
+#:
+#: Which two survive is not arbitrary:
+#:
+#:  - The **diagnosis refusal** (index 4) is kept because it is the one
+#:    exemplar demonstrating a rule the model measurably fails. M9 found the
+#:    fine-tune declining diagnosis requests just 20% of the time (base: 53%),
+#:    so removing its only worked example would almost certainly make the
+#:    project's worst failure mode worse.
+#:  - The **long block, unmentioned** (index 0) is kept because it is the core
+#:    product behaviour: answer the content, do not narrate the dysfluency.
+#:
+#: The three dropped teach pace-framing, asked-for feedback, and brevity on
+#: fluent turns — all style, and all behaviours M9 measured the fine-tune
+#: already performing at 93-100%. That is the cut worth testing: drop what the
+#: weights know, keep what they get wrong.
+EXEMPLARS_COMPACT: tuple[Exemplar, ...] = (EXEMPLARS[0], EXEMPLARS[4])
+
+
 def render(exemplars: tuple[Exemplar, ...] = EXEMPLARS) -> list[dict[str, str]]:
     """Render as chat messages for the few-shot prefix."""
     out: list[dict[str, str]] = []

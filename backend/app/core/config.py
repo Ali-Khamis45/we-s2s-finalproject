@@ -152,6 +152,19 @@ class Settings(BaseSettings):
     # Track M swaps this to "finetuned" when M8 lands. Keeping both addressable
     # is what makes the base-vs-fine-tuned comparison (M9) runnable in-app.
     llm_variant: str = "base"
+    #: Use the shortened prompt variant (`a12-v5-compact`, ~485 tokens vs ~976).
+    #:
+    #: Measured against the shipped 3B on CPU: the saving is almost entirely on
+    #: the FIRST turn of a session, where nothing is cached — 13.8 s -> 7.1 s to
+    #: first token. Once llama.cpp has the prefix cached, later turns differ by
+    #: only ~70 ms (433 -> 361 ms p50), because prompt length stops mattering.
+    #:
+    #: Off by default: it is an experiment pending an M9 quality run, not an
+    #: adopted default. Every scope-boundary rule survives in the compact
+    #: variant, but M9 already measured the fine-tune declining diagnosis
+    #: requests only 20% of the time, so this must be re-measured before it
+    #: ships. Set SCC_PROMPT_COMPACT=1 to try it.
+    prompt_compact: bool = False
 
     # ---- auth ----
     #: HS256 signing secret. There is deliberately no usable default: a

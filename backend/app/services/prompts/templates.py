@@ -81,6 +81,49 @@ impairment, rehabilitation.
 Use instead: speaker, practice, coaching, exercise, what I heard, speech difference."""
 
 
+#: Compact variant of SYSTEM_PROMPT, for measuring what prompt length costs.
+#:
+#: Motivation is measured, not stylistic. On CPU, prefill runs at ~56 tok/s, so
+#: every prompt token costs ~18 ms before the user hears anything. `a12-v5`
+#: builds to ~976 tokens (531 system + 445 few-shot), which is ~17.6 s of
+#: prefill on a cold turn — and that is exactly the 15.6 s p95 measured by
+#: `backend/scripts/bench_latency.py` against the shipped 3B.
+#:
+#: What is preserved, deliberately: every scope-boundary rule (no diagnosis,
+#: refer out, banned vocabulary) survives verbatim in substance. M9 measured
+#: the fine-tune declining diagnosis requests only 20% of the time, so this
+#: variant must not weaken that further — the compression comes out of style
+#: guidance the fine-tune has already internalised (M9: 97% did not name the
+#: dysfluency unprompted, 100% speakable), not out of safety rules.
+SYSTEM_PROMPT_COMPACT = """\
+You are a speaking-practice coach for people with speech differences — \
+stuttering, cluttering, or speaking anxiety.
+
+You are not a clinician and do not assess, diagnose, or treat anyone. If asked \
+to judge whether someone has a speech disorder, say plainly it is outside what \
+you can do, point them to a speech-language pathologist, and offer the practice \
+help you can give.
+
+Some turns include an <acoustic_context> block describing how the speech \
+sounded. It exists so you can adapt, not report it back:
+  - Answer what the person MEANT; delivery is not the topic.
+  - Never mention a block, repetition, or filler unless they asked about their \
+speech.
+  - After a long block or a fast rate, keep the reply SHORT.
+  - Never finish their sentence or fill their pause.
+
+Coach with one concrete suggestion at a time, specific enough to try in the \
+next sentence. No scores or ratings. Ask one question at a time, preferring a \
+concrete choice over an open prompt.
+
+Your replies are read aloud: plain spoken language, no lists, headings, or \
+markdown. Two to four sentences.
+
+Never use: patient, therapy, treatment, diagnosis, symptom, severity, disorder, \
+impairment, rehabilitation. Use: speaker, practice, coaching, exercise, what I \
+heard, speech difference."""
+
+
 GROUNDED_INSTRUCTION = """\
 REFERENCE MATERIAL FOR THIS TURN
 
@@ -203,12 +246,25 @@ def build(
     citations: list[Citation] | None = None,
     history: list[HistoryTurn] | None = None,
     few_shot: bool = True,
+    compact: bool | None = None,
 ) -> PromptBundle:
-    """Assemble the full prompt for one cascade turn."""
+    """Assemble the full prompt for one cascade turn.
+
+    `compact` swaps in the shortened system prompt and the reduced exemplar set
+    (`a12-v5-compact`). It exists to measure what prompt length costs: prefill
+    dominates CPU latency, so this is the experiment, not a second product
+    persona. Both variants keep every scope-boundary rule — see
+    SYSTEM_PROMPT_COMPACT and EXEMPLARS_COMPACT for what was cut and why.
+    """
     citations = citations or []
     history = history or []
+    # None means "follow the setting", so every caller picks it up without
+    # threading the flag through. An explicit True/False still wins, which is
+    # what lets an evaluation run pin the variant regardless of environment.
+    if compact is None:
+        compact = settings.prompt_compact
 
-    system = SYSTEM_PROMPT
+    system = SYSTEM_PROMPT_COMPACT if compact else SYSTEM_PROMPT
 
     # Reference material goes in the SYSTEM message, not the user turn. Placed
     # beside the question it reads as a document to present, and the model
@@ -230,7 +286,8 @@ def build(
 
     used_few_shot = False
     if few_shot:
-        for m in exemplars.render():
+        chosen = exemplars.EXEMPLARS_COMPACT if compact else exemplars.EXEMPLARS
+        for m in exemplars.render(chosen):
             messages.append(Message(role=m["role"], content=m["content"]))
         used_few_shot = True
 
@@ -258,6 +315,10 @@ def build(
 
     return PromptBundle(
         messages=messages,
+        # The variant must be visible in the version, or the guarantee this
+        # module exists to provide — that a comparison ran both arms on the
+        # same prompt — silently stops holding.
+        version=f"{PROMPT_VERSION}-compact" if compact else PROMPT_VERSION,
         used_acoustic=used_acoustic,
         used_retrieval=bool(citations),
         used_few_shot=used_few_shot,

@@ -185,8 +185,18 @@ class MoshiClient:
                 websockets.connect(
                     settings.moshi_url,
                     max_size=None,        # audio frames are large and continuous
-                    ping_interval=20,
-                    ping_timeout=20,
+                    # Keepalive disabled deliberately. Moshi is GPU-bound, and
+                    # on an 8GB card holding ~7.6GB of weights it stalls longer
+                    # than a 20s ping timeout mid-session. The library was then
+                    # closing a live conversation with "1011 keepalive ping
+                    # timeout", which the UI reports as "the live coach dropped
+                    # out" — a working session killed by its own health check.
+                    #
+                    # Liveness is not lost: the session ends when either audio
+                    # pump finishes, and connect() still has its own timeout, so
+                    # an upstream that is genuinely gone is still caught.
+                    ping_interval=None,
+                    ping_timeout=None,
                 ),
                 timeout=settings.moshi_connect_timeout_s,
             )

@@ -64,7 +64,7 @@ export function Conversation({ messages, speaking }: Props) {
           <span className="speaking-dots" aria-hidden="true">
             <i /> <i /> <i />
           </span>
-          Coach is speaking — just talk to interrupt
+          Coach is speaking — talk over it, or press Interrupt
         </div>
       )}
       <div ref={endRef} />

@@ -174,6 +174,70 @@ describe("barge-in", () => {
   });
 });
 
+describe("live path: 40ms Moshi frames", () => {
+  // The regime the earlier tests missed. TTS sends multi-second chunks; Moshi
+  // streams 40ms frames, and every scheduling assumption changes at that size.
+
+  it("prebuffers instead of playing the first frame immediately", () => {
+    const player = new StreamPlayer(24_000);
+    // 5 frames = 200ms, still under the 450ms cushion.
+    for (let i = 0; i < 5; i++) player.enqueue(chunk(0.04));
+    expect(audio().sources.length).toBe(0);
+    expect(player.isPlaying).toBe(true); // audio is in hand, just not started
+  });
+
+  it("releases the whole prebuffer contiguously once it fills", () => {
+    const player = new StreamPlayer(24_000);
+    for (let i = 0; i < 12; i++) player.enqueue(chunk(0.04)); // 480ms > 450ms
+
+    const starts = audio().sources.map((s) => s.startedAt!);
+    expect(starts.length).toBe(12);
+    // Every frame butts against the previous one: no gaps inside the burst.
+    for (let i = 1; i < starts.length; i++) {
+      expect(starts[i] - starts[i - 1]).toBeCloseTo(0.04, 5);
+    }
+  });
+
+  it("does not re-trigger the underrun reset on every small frame", () => {
+    // The bug: testing `nextStartTime < currentTime + LEAD/2` fired for frames
+    // this small on nearly every call, re-inserting the full lead as a gap and
+    // turning the cushion into the stutter it was meant to prevent.
+    const player = new StreamPlayer(24_000);
+    for (let i = 0; i < 20; i++) player.enqueue(chunk(0.04));
+
+    const starts = audio().sources.map((s) => s.startedAt!);
+    const gaps = starts.slice(1).map((s, i) => s - starts[i]);
+    expect(Math.max(...gaps)).toBeCloseTo(0.04, 5);
+  });
+});
+
+describe("speaking indicator", () => {
+  it("stays true between chunks, while a source is momentarily absent", () => {
+    // The bug this pins: `isPlaying` used to require `sources.size > 0`, but
+    // sources are dropped in their own `onended`. Between one sentence ending
+    // and the next arriving the set is empty even though the coach is still
+    // mid-reply, so the "Coach is speaking" hint flickered on and off — and
+    // barge-in stopped watching for exactly that window.
+    const player = new StreamPlayer(24_000);
+    player.enqueue(chunk(1));
+
+    const source = audio().sources[0];
+    audio().currentTime = source.startedAt! + 0.5; // half way through
+    source.onended?.(); // browser drops it early; audio still scheduled
+
+    expect(player.isPlaying).toBe(true);
+  });
+
+  it("goes false once the scheduled audio has actually finished", () => {
+    const player = new StreamPlayer(24_000);
+    player.enqueue(chunk(1));
+
+    audio().currentTime = player.queuedSeconds + audio().currentTime + 0.01;
+
+    expect(player.isPlaying).toBe(false);
+  });
+});
+
 describe("queue reporting", () => {
   it("reports buffered audio ahead of the clock", () => {
     const player = new StreamPlayer(24_000);
