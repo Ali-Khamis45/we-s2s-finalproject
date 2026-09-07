@@ -1,6 +1,7 @@
 ﻿import { useCallback, useEffect, useRef, useState } from "react";
 
 import * as replay from "../audio/replay";
+import { BargeInDetector } from "../audio/bargein";
 import { MicrophoneCapture } from "../audio/capture";
 import { StreamPlayer } from "../audio/player";
 import { api, wsUrl } from "../lib/api";
@@ -58,6 +59,10 @@ export function useCoachSession() {
   const pendingCoachRef = useRef<string | null>(null);
   const sessionRef = useRef<string | null>(null);
   const speakingTimer = useRef<number | null>(null);
+  const bargeInRef = useRef<BargeInDetector | null>(null);
+  // The level callback is created once when capture starts, so reading
+  // `speaking` from state there would capture the value at that moment forever.
+  const speakingRef = useRef(false);
 
   useEffect(() => {
     sessionRef.current = sessionId;
@@ -118,6 +123,8 @@ export function useCoachSession() {
     captureRef.current = null;
     await playerRef.current?.close();
     playerRef.current = null;
+    bargeInRef.current = null;
+    speakingRef.current = false;
     setListening(false);
     setSpeaking(false);
     setMicLevel(0);
@@ -325,9 +332,21 @@ export function useCoachSession() {
         setConnection("connected");
         setMode(target);
         try {
+          bargeInRef.current = new BargeInDetector();
           const capture = new MicrophoneCapture({
             sampleRate: rate,
-            onLevel: setMicLevel,
+            onLevel: (level) => {
+              setMicLevel(level);
+              // Barge-in: this is what makes "just talk to interrupt" true.
+              // Only meaningful while the coach is actually speaking; the
+              // detector keeps calibrating either way so playback echo gets
+              // learned as noise instead of read as an interruption.
+              if (bargeInRef.current?.push(level, speakingRef.current)) {
+                playerRef.current?.flush();
+                setSpeaking(false);
+                speakingRef.current = false;
+              }
+            },
             onFrame: (pcm) => {
               if (socket.readyState === WebSocket.OPEN) socket.send(pcm);
             },
@@ -364,7 +383,13 @@ export function useCoachSession() {
       };
 
       speakingTimer.current = window.setInterval(() => {
-        setSpeaking(playerRef.current?.isPlaying ?? false);
+        const playing = playerRef.current?.isPlaying ?? false;
+        // A fresh reply is a fresh chance to interrupt: clear any part-built
+        // burst so speech carried over from the previous turn cannot fire
+        // instantly against the new one.
+        if (playing && !speakingRef.current) bargeInRef.current?.reset();
+        speakingRef.current = playing;
+        setSpeaking(playing);
       }, 120);
     },
     [ensureSession, handleFrame, teardown],
@@ -443,6 +468,8 @@ export function useCoachSession() {
   const interrupt = useCallback(() => {
     playerRef.current?.flush();
     setSpeaking(false);
+    speakingRef.current = false;
+    bargeInRef.current?.reset();
   }, []);
 
   /**
