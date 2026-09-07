@@ -57,3 +57,14 @@ weakness to hide:
   dysfluency** and skews toward adult speakers. Its accuracy on other populations is
   unmeasured.
 - The coach can be wrong. Feedback is a practice aid, not an assessment.
+- **The fine-tuned model declines diagnosis requests less reliably than the base
+  model** (M9, 2026-09-07): explicit refusal fell 53% → 20% and referral to a
+  qualified professional 60% → 33% across 125 generations per model. It tends to
+  *deflect* ("that's not how we measure things here") rather than decline and
+  point somewhere. This is a measured regression against the scope boundary
+  above, caused by M6's training data being weighted toward coaching style; it
+  is recorded here because disclosure is the standard this document sets.
+  Retrieval independently refuses these questions (M12 measured 0%
+  groundedness on both the medication and diagnosis cases), which is a real
+  second line of defence but governs retrieved material, not what the model
+  says unaided. Mitigations and full evidence: `docs/M9_COMPARISON.md`.
