@@ -37,6 +37,10 @@ export class StreamPlayer {
   private gain: GainNode | null = null;
   private nextStartTime = 0;
   private sources = new Set<AudioBufferSourceNode>();
+  //: Frames held back until LEAD_SECONDS of audio exists to start from.
+  private pending: AudioBuffer[] = [];
+  private pendingSeconds = 0;
+  private startedStream = false;
 
   constructor(private readonly sampleRate: number) {}
 
@@ -64,20 +68,52 @@ export class StreamPlayer {
     const channel = buffer.getChannelData(0);
     for (let i = 0; i < ints.length; i++) channel[i] = ints[i] / 32768;
 
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(this.gain!);
-
-    // Underrun: the queue drained while we waited for the network. Restart the
-    // clock ahead of `currentTime` instead of scheduling in the past, which
-    // browsers silently collapse into an immediate, overlapping playback.
-    if (this.nextStartTime < ctx.currentTime + LEAD_SECONDS / 2) {
+    // Underrun: the queue drained and playback time has caught up with what is
+    // scheduled. Restart the clock ahead of `currentTime` rather than
+    // scheduling in the past, which browsers silently collapse into immediate,
+    // overlapping playback.
+    //
+    // The test is against `currentTime`, NOT `currentTime + LEAD/2`. Moshi
+    // streams 40ms frames, so on the live path `nextStartTime` is only ever a
+    // few tens of ms ahead — comfortably inside any fraction of the lead — and
+    // a wider test fired this branch on nearly every frame, re-inserting the
+    // full lead as a gap each time. That turned the cushion into the stutter it
+    // was meant to prevent.
+    if (this.nextStartTime < ctx.currentTime) {
       this.nextStartTime = ctx.currentTime + LEAD_SECONDS;
     }
 
+    // Hold the stream back until a cushion of audio exists, then let it run.
+    // Without this the very first frame plays the instant it lands with nothing
+    // queued behind it, so on the live path — where frames are 40ms — the
+    // decoder is racing the speaker from the first word and every hiccup is
+    // audible. Once started, `startedStream` stays true so mid-reply frames are
+    // scheduled immediately and gaplessly.
+    if (!this.startedStream) {
+      this.pendingSeconds += buffer.duration;
+      if (this.pendingSeconds < LEAD_SECONDS) {
+        this.pending.push(buffer);
+        return;
+      }
+      this.startedStream = true;
+      // Start the burst slightly ahead of the clock so the first frame is not
+      // scheduled at "now", which leaves the callback no room to run.
+      this.nextStartTime = Math.max(this.nextStartTime, ctx.currentTime + 0.02);
+      const queued = this.pending;
+      this.pending = [];
+      for (const b of queued) this.schedule(ctx, b);
+    }
+
+    this.schedule(ctx, buffer);
+  }
+
+  /** Place one decoded buffer at the end of the scheduled stream. */
+  private schedule(ctx: AudioContext, buffer: AudioBuffer): void {
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(this.gain!);
     source.start(this.nextStartTime);
     this.nextStartTime += buffer.duration;
-
     this.sources.add(source);
     source.onended = () => this.sources.delete(source);
   }
@@ -96,6 +132,9 @@ export class StreamPlayer {
    */
   get isPlaying(): boolean {
     if (!this.context) return false;
+    // Audio held in the prebuffer counts: the coach is speaking from the
+    // moment frames start arriving, not from the moment they reach the speaker.
+    if (this.pending.length > 0) return true;
     return this.nextStartTime > this.context.currentTime;
   }
 
@@ -115,6 +154,12 @@ export class StreamPlayer {
     }
     this.sources.clear();
     this.nextStartTime = this.context?.currentTime ?? 0;
+    // Drop the prebuffer too, and re-arm it: after an interruption the next
+    // reply is a fresh stream and deserves its own cushion, otherwise it starts
+    // racing the speaker exactly as the first one did.
+    this.pending = [];
+    this.pendingSeconds = 0;
+    this.startedStream = false;
   }
 
   async close(): Promise<void> {
