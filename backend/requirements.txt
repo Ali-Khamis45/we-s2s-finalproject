@@ -42,9 +42,22 @@ kokoro==0.3.4
 misaki==0.6.7
 soundfile==0.12.1
 
-# ---- LLM serving (cascade, CPU via llama.cpp) ----
-llama-cpp-python==0.3.5
+# ---- LLM serving (cascade) ----
+# The backend talks to an OpenAI-compatible endpoint over HTTP and nothing
+# more, so httpx is the only requirement here. Any server behind that API
+# works: llama-server, Ollama, or `python -m llama_cpp.server`.
 httpx==0.28.1
+
+# NOTE: `llama-cpp-python` is deliberately NOT pinned here. It is one optional
+# way to *serve* a model (see backend/scripts/README.md); no application code
+# imports `llama_cpp`. It ships no wheel for several Python/MSVC combinations
+# and builds from source via CMake, and because pip fails the whole
+# transaction, a failed build installs *nothing else either* -- which cost
+# both tracks a working environment. Install it only if you want that server:
+#
+#     pip install llama-cpp-python==0.3.5
+#
+# Do not "tidy" it back into this file.
 
 # ---- Audio utilities ----
 numpy==1.26.4

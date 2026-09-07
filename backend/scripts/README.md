@@ -160,9 +160,15 @@ much better than being confidently wrong about it.
 The whole Knowledge Mode path end to end, driven through the real FastAPI app:
 retrieval, prompt assembly, generation, streaming, and persistence.
 
-Needs a served model first:
+Needs a served model first. Anything exposing an OpenAI-compatible `/v1`
+works -- `llama-server`, Ollama, or `llama_cpp.server` as below.
+
+`llama-cpp-python` is not in `requirements.txt` (it has no wheel on some
+Python/MSVC combinations, and a failed build aborts the entire install),
+so install it only if you want this particular server:
 
 ```bash
+pip install llama-cpp-python==0.3.5
 python -m llama_cpp.server --model <path>.gguf --model_alias qwen-test \
   --port 8080 --n_ctx 4096 --chat_format chatml
 python scripts/verify_cascade.py scripts/words/dysfluent_utterance.wav

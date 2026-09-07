@@ -25,7 +25,11 @@ from typing import Any
 import numpy as np
 
 from app.core.config import settings
-from app.core.errors import CorpusEmptyError, DependencyMissingError
+from app.core.errors import (
+    CorpusEmptyError,
+    CorpusUnreadableError,
+    DependencyMissingError,
+)
 from app.core.logging import get_logger
 from app.schemas.chat import Citation
 
@@ -75,16 +79,26 @@ def mmr_select(
     *,
     k: int,
     lambda_mult: float,
+    penalties: list[float] | None = None,
 ) -> list[int]:
     """Maximal Marginal Relevance.
 
     Picks documents that are relevant to the query but unlike what has already
     been picked. Returns indices into `doc_vecs`, in selection order.
+
+    `penalties` subtracts from a candidate's relevance before ranking, which is
+    how drill chunks are demoted (see `is_drill_chunk`). It changes the *order*
+    only — never whether a chunk is indexed, counted, or allowed through the
+    groundedness gate, all of which stay keyed to true similarity. A penalized
+    chunk is still selected when nothing better is on offer, because an
+    exercise list is a worse citation than prose but a better one than silence.
     """
     if doc_vecs.size == 0:
         return []
 
     relevance = _cosine(query_vec, doc_vecs)
+    if penalties is not None:
+        relevance = relevance - np.asarray(penalties, dtype=np.float32)
     k = min(k, doc_vecs.shape[0])
 
     selected: list[int] = [int(np.argmax(relevance))]
@@ -192,11 +206,32 @@ class RetrievalService:
     # ---- queries -------------------------------------------------------
 
     async def count(self) -> int:
+        """Number of indexed chunks.
+
+        Only a *missing* corpus counts as zero. If the index is present but the
+        driver cannot read it, that is raised, not smoothed over -- see
+        `CorpusUnreadableError` for why the difference is load-bearing.
+        """
         try:
             collection = await self.collection()
-            return int(await asyncio.to_thread(collection.count))
-        except Exception:
+        except DependencyMissingError:
+            # chromadb is not installed, so there is genuinely no corpus here.
             return 0
+        except Exception as exc:
+            log.error(
+                "corpus index could not be opened",
+                extra={"error": f"{type(exc).__name__}: {exc}"},
+            )
+            raise CorpusUnreadableError(exc) from exc
+
+        try:
+            return int(await asyncio.to_thread(collection.count))
+        except Exception as exc:
+            log.error(
+                "corpus index could not be counted",
+                extra={"error": f"{type(exc).__name__}: {exc}"},
+            )
+            raise CorpusUnreadableError(exc) from exc
 
     async def retrieve(
         self,
@@ -245,10 +280,24 @@ class RetrievalService:
                 citations=[], grounded=False, best_score=best, candidates=len(documents)
             )
 
+        # Demote back-of-chapter exercises. The gate above has already run on
+        # true similarity, so this only decides what gets cited, never whether
+        # the answer is considered grounded.
+        penalties = [
+            settings.retrieval_drill_penalty
+            if (metadatas[i] or {}).get("is_drill")
+            else 0.0
+            for i in range(len(documents))
+        ]
+
         doc_vecs = np.asarray(embeddings, dtype=np.float32)
         order = (
             mmr_select(
-                query_vec, doc_vecs, k=k, lambda_mult=settings.retrieval_lambda
+                query_vec,
+                doc_vecs,
+                k=k,
+                lambda_mult=settings.retrieval_lambda,
+                penalties=penalties,
             )
             if doc_vecs.size
             else list(range(min(k, len(documents))))
