@@ -350,7 +350,15 @@ class Orchestrator:
             "corpus_chunks": corpus,
             "corpus_status": corpus_status,
             "analyzer": dysfluency_analyzer.backend_name,
-            "prompt_version": templates.PROMPT_VERSION,
+            # Report the variant actually in use, not the module constant --
+            # otherwise status says "a12-v5" while every turn is built with
+            # the compact prompt, which is exactly the sort of silent mismatch
+            # the versioning exists to prevent.
+            "prompt_version": (
+                f"{templates.PROMPT_VERSION}-compact"
+                if settings.prompt_compact
+                else templates.PROMPT_VERSION
+            ),
             "llm_variant": settings.llm_variant,
         }
 
