@@ -61,6 +61,22 @@ re-measurement exists, do not claim "~200 ms" for Moshi in the report — cite
 the measured 1.6 s figure with the relay caveat, exactly as this section
 already insists for the cascade side.
 
+**Resolved by M12 (2026-09-07) — this is now the figure to quote.** The
+re-measurement demanded above exists: through M2's production bridge, Moshi's
+time-to-first-audio is **p50 2009.9 ms / p95 2645.0 ms**. The relay was *not*
+the explanation — the M1 figure (1.6 s) and the production figure (2.0 s) are
+the same order, so the gap against Kyutai's ~200 ms is this hardware and this
+q8 build, not M1's plumbing. **Never cite ~200 ms for Moshi in this report.**
+
+M12 also overturned the second half of the assumption. The cascade's LLM stage
+swings **43x on a serving build flag** (~57 s on CPU → ~1.4 s on CUDA 13.3;
+see `ml/finetuning/llama.cpp/README.md`), so "Moshi is fast, the cascade is
+slow" is not a claim the measurements support. With the GPU free, the cascade
+is competitive with or faster than Moshi; with Moshi holding the GPU, it falls
+back to CPU. **The real constraint is that both modes contend for one 8 GB
+GPU** — that, not either model's intrinsic speed, governs latency in the
+shipped product. Full account: `docs/M12_COMPARISON.md`.
+
 **Moshi's real limitations, stated plainly, because they will come up in the defense:**
 
 - It is **English-only**.
@@ -190,8 +206,8 @@ the original spec.
 | M8 | ✅ **DONE (2026-09-06).** Adapter merged into base weights (`ml/finetuning/merge_adapter.py`), converted to GGUF f16, quantized to Q4_K_M (5886MB → 1835MB, ~3.2x). Served locally with `llama-server.exe` (prebuilt binary, fetched ahead of need in M4) on the OpenAI-compatible endpoint the backend already expects — verified with a real chat completion request, coherent on-topic coaching response, ~22 tok/s generation / ~55 tok/s prompt on CPU (GPU stays free for Moshi). Full pipeline: `ml/finetuning/M8_README.md`. **Wired into and verified against the real backend**: `backend/.env` set (`SCC_LLM_VARIANT=finetuned`, `SCC_DYSFLUENCY_MODEL_PATH`), full `backend/requirements.txt` installed (except `llama-cpp-python`, unused by any app code — the app talks to `llama-server` over HTTP, not in-process — and its vendored llama.cpp fails to compile on this MSVC toolchain), the FastAPI app booted end-to-end with `SCC_EAGER_LOAD=1`, `GET /api/status` confirmed `llm_reachable: true, llm_variant: "finetuned"`, and `dysfluency_analyzer.analyze()` confirmed `source: "wav2vec2-sep28k"` (the real M4 checkpoint, not the heuristic fallback). Found and fixed two real pre-existing bugs blocking this: M4's checkpoint had never had `id2label`/`label2id` set to match `backend/app/schemas/acoustic.py`'s `DysfluencyKind` (would have silently produced zero events forever), and `from __future__ import annotations` + FastAPI 0.115.6 misreads a bare `-> None` on 5 `status_code=204` routes across `auth.py`/`sessions.py`, crashing app boot entirely — neither had been previously caught because the backend had never been run with a full venv install before. Backend test suite: 63/63 passing. | Deployable cascade model |
 | M9 | **Base vs. fine-tuned comparison** — held-out eval set, ROUGE-L + BERTScore, LLM-as-judge rubric (empathy, actionability, pacing appropriateness), human study (n=10–15, Likert) | **Required comparison** |
 | M10 | **Optimization analysis** — QLoRA + 4-bit quantization measured on model size, peak VRAM, tokens/sec, TTFT, quality delta vs FP16 | **Required optimization technique** |
-| M11 | **Moshi LoRA coaching adapter** — fine-tune the backbone toward the coaching persona, since Moshi cannot be system-prompted. Stretch goal; cut if week 7 is tight. | Steerable flagship |
-| M12 | Comparative evaluation: Moshi vs cascade on latency (p50/p95), dysfluency perception fidelity, and response groundedness | **Thesis headline result** |
+| M11 | ⏸️ **DEFERRED (2026-09-07), blockers verified rather than assumed** — full record: `docs/M11_MOSHI_LORA.md`. Four established blockers: the cached weights are `kyutai/moshiko-candle-q8`, a quantized Candle *inference* artifact, not a trainable PyTorch checkpoint (a fresh multi-GB download); no speech-token training pipeline exists and M6's 400 text pairs do not transfer (Moshi needs paired coaching audio encoded through Mimi to RVQ codebooks — a dataset task on the scale of M3+M6); 8GB VRAM with ~1.2GB already resident is tight for training a 7B backbone plus depth transformer; and **no harness exists to evaluate a speech-output fine-tune**, which would make the result unfalsifiable — the blocker that matters most. M12's own results further lower its value: an adapter changes *persona* but supplies neither a perception stage, a corpus, nor citations, so the dual-mode split stands either way. Ran after M9/M10/M12 because those are required rubric items and this is not. | Steerable flagship (deferred) |
+| M12 | ✅ **DONE (2026-09-07).** Full report: `docs/M12_COMPARISON.md`. **Latency:** the plan's ~200ms assumption for Moshi is wrong on this hardware — M2's production bridge measures **p50 2009.9ms / p95 2645.0ms**, and that is the figure to quote. The cascade's LLM stage swings 43x on a build flag (~57s CPU → **~1.4s** CUDA 13.3), so the comparison is conditional, not absolute: with the GPU free the cascade is *competitive with or faster than* Moshi; with Moshi holding the GPU it falls back to CPU. **The two modes contending for one 8GB GPU — not either model's intrinsic speed — is what governs latency in the shipped product.** **Fidelity:** cascade scores **macro F1 0.612** (P 0.608 / R 0.644) over 400 held-out SEP-28k clips (`ml/evaluation/bench_fidelity.py`), independently reproducing M4's reported 0.638. Moshi is **not measurable** — no intermediate dysfluency representation exists; scoring its output with the cascade's own classifier would measure the classifier twice. **Groundedness:** cascade grounds **100% of in-corpus / 0% of out-of-corpus** questions (`ml/evaluation/bench_groundedness.py`, reading the retrieval service's own `grounded` flag), correctly refusing both the medication and diagnosis questions below `retrieval_min_score` — ETHICS.md's scope boundary holding at the retrieval layer, before the LLM is asked. Moshi has no corpus and cannot cite. **Conclusion: neither path subsumes the other, which is why the product ships both** — and A16's dysfluency timeline can only be built from the cascade's perception stage. | **Thesis headline result** |
 
 #### M2 starting point (handed off from M1, 2026-09-05)
 
