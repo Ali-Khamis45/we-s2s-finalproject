@@ -88,6 +88,18 @@ class Settings(BaseSettings):
     chunk_overlap: int = 64
     retrieval_k: int = 4
     retrieval_fetch_k: int = 20
+    #: Subtracted from a chunk's relevance when it is back-of-chapter homework
+    #: rather than coaching prose (`ingestion.is_drill_chunk` marks these;
+    #: 5.3% of the corpus). One citation for "how do I use pauses" was
+    #: literally "2. What are the four special effects of pause?".
+    #:
+    #: Demotion, not exclusion, and deliberately so: these chunks stay indexed
+    #: and counted, because `retrieval_min_score` below is calibrated against
+    #: corpus size and dropping 5% of it would move the gate. A drill can still
+    #: be cited when nothing better matches — worse than prose, better than
+    #: silence. 0.15 is comfortably wider than the 0.077 in/out gap, so a drill
+    #: loses to any genuinely comparable passage. Set to 0.0 to disable.
+    retrieval_drill_penalty: float = 0.15
     retrieval_lambda: float = 0.5
     #: Cap on how much of each retrieved chunk is pasted into the prompt.
     #:

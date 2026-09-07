@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -119,6 +120,56 @@ def _fallback_split(text: str) -> list[str]:
     return chunks
 
 
+#: A numbered item opens a line; its text may wrap onto the lines below, which
+#: is why this anchors on the line start rather than requiring a trailing "?".
+_NUMBERED_ITEM = re.compile(r"(?m)^[ \t]*(\d{1,3})[.)]\s+\S")
+
+#: Share of a chunk that must be numbered-list material before it counts as a
+#: drill. Real drills have a median share of 0.85; prose that merely abuts one
+#: falls below 0.5, so 0.6 separates them with room either side.
+DRILL_DOMINANCE = 0.6
+
+
+def is_drill_chunk(text: str) -> bool:
+    """True when a chunk is back-of-chapter homework rather than coaching prose.
+
+    Every source predates 1930 and is built as a textbook, so the corpus
+    carries exercise lists — "2. What are the four special effects of pause?"
+    Returned as a citation, one answers a question with homework.
+
+    Three conditions, all measured against the real 1057-chunk corpus rather
+    than guessed:
+
+    * **A run of at least three numbered items.** One or two is a footnote or
+      a citation inside ordinary prose.
+    * **Ascending numbering.** Consecutive items are a list; scattered numbers
+      are page references.
+    * **The list dominates the chunk.** This is the load-bearing one. The
+      splitter overlaps chunks, so genuine prose frequently carries a numbered
+      tail from the drill that follows it. Requiring the list to occupy most
+      of the chunk is what separates a drill from prose that merely ends near
+      one — without it, 25% of what this flags is real coaching material.
+
+    Chunks are marked, never dropped: `retrieval_min_score` is calibrated
+    against the corpus size, so removing chunks would silently move the
+    groundedness gate.
+    """
+    if not text:
+        return False
+
+    matches = list(_NUMBERED_ITEM.finditer(text))
+    if len(matches) < 3:
+        return False
+
+    numbers = [int(m.group(1)) for m in matches]
+    ascending = sum(1 for a, b in zip(numbers, numbers[1:]) if b == a + 1)
+    if ascending < 2:
+        return False
+
+    # How much of the chunk sits at or after the first numbered item.
+    return (len(text) - matches[0].start()) / len(text) >= DRILL_DOMINANCE
+
+
 def _title_of(path: Path, text: str) -> str:
     """Prefer a markdown H1, then a plausible first line, then the filename."""
     for line in text.splitlines()[:12]:
@@ -201,6 +252,10 @@ class IngestionService:
                         "title": title,
                         "chunk_index": start + i,
                         "chars": len(c),
+                        # Marked, not filtered: retrieval demotes these when
+                        # ranking citations, but they stay indexed and counted
+                        # so the calibrated groundedness gate still holds.
+                        "is_drill": is_drill_chunk(c),
                     }
                     for i, c in enumerate(batch)
                 ],
